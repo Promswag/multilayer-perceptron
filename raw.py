@@ -55,19 +55,23 @@ def predict(X, W, b):
 	return af.softmax(z)
 
 def main():
-	data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+	# data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+	data = load_digits(as_frame=True)
+	data = pd.DataFrame(data.frame)
+
+	target_index = 64
+	Y = data.iloc[:, target_index]
+	X = data.drop(data.columns[target_index], axis=1)
 
 	scaler = StandardScaler()
-	data.iloc[:, 1:] = scaler.fit_transform(data.iloc[:, 1:])
+	X = scaler.fit_transform(X)
+	X = X.fillna(0)
 
-	m, n = data.iloc[:, 1:].shape
-	Y = data.iloc[:, 0]
-	X = data.iloc[:, 1:]
-
+	m, n = X.shape
 	output_classes = {i: c for i, c in enumerate(Y.unique())}
 	Y = Y.map({v: k for k, v in output_classes.items()})
 
-	LAYERS = [2, len(Y.unique())]
+	LAYERS = [10, len(Y.unique())]
 	W = []
 	b = []
 
@@ -104,7 +108,7 @@ def main():
 
 	pred = np.argmax(predict(X, W, b).T, axis=1)
 	print(np.sum(pred == Y)/len(pred))
-	pd.Series(pred, index=data.index[:10]).map(output_classes).to_csv("ressources/pred.csv", header=None)
+	pd.Series(pred, index=X.index).map(output_classes).to_csv("ressources/pred.csv", header=None)
 	Y.to_csv("ressources/mdr.csv", header=None)
 
 if __name__ == "__main__":

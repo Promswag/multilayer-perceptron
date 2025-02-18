@@ -109,8 +109,7 @@ def main():
 		if epoch % 100 == 0:
 			output = np.argmax(output.T, axis=1)
 			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(output == Y)/len(output):.3f}")
-	# print(predict(X, W, b).T)
-	# return
+
 	pred = np.argmax(predict(X, W, b).T, axis=1)
 	print(np.sum(pred == Y)/len(pred))
 	pd.Series(pred, index=data.index[:10]).map(output_classes).to_csv("ressources/pred.csv", header=None)
