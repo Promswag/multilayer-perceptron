@@ -5,8 +5,6 @@ from sklearn.datasets import load_digits
 from StandardScaler import StandardScaler
 import activation_functions as af
 
-
-
 def forward_prop(X, W, b):
 	A = []
 	A.append(X.values.T)
@@ -22,10 +20,10 @@ def compute_cost(pred, Y, m):
 def backward_prop(A, Y, W, b, m):
 	dW = []
 	db = []
-	delta = A[-1] - one_hot(Y)
+	delta = A[-1] - Y
 	for i in range(len(W) - 1, -1, -1):
 		dW.append(np.dot(delta, A[i].T) / m)
-		db.append(np.sum(delta) / m)
+		db.append(np.sum(delta, axis=1, keepdims=True) / m)
 		if i > 0:
 			delta = np.dot(W[i].T, delta) * af.sigmoid_derivative(A[i])
 
@@ -57,22 +55,14 @@ def predict(X, W, b):
 	return af.softmax(z)
 
 def main():
-	# data = pd.read_csv("ressources/data.csv", index_col=0, header=None)
-	# data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
-	data = load_digits(as_frame=True)
-	data = pd.DataFrame(data.frame)
+	data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+
 	scaler = StandardScaler()
-	# data.iloc[:, 1:] = scaler.fit_transform(data.iloc[:, 1:])
+	data.iloc[:, 1:] = scaler.fit_transform(data.iloc[:, 1:])
 
-	# m, n = data.iloc[:, 1:].shape
-	# Y = data.iloc[:, 0]
-	# X = data.iloc[:, 1:]
-
-	data.iloc[:, :-1] = scaler.fit_transform(data.iloc[:, :-1])
-	data = data.fillna(0)
-	m, n = data.iloc[:, :-1].shape
-	Y = data.iloc[:10, -1]
-	X = data.iloc[:10, :-1]
+	m, n = data.iloc[:, 1:].shape
+	Y = data.iloc[:, 0]
+	X = data.iloc[:, 1:]
 
 	output_classes = {i: c for i, c in enumerate(Y.unique())}
 	Y = Y.map({v: k for k, v in output_classes.items()})
@@ -83,34 +73,35 @@ def main():
 
 	for layer in range(len(LAYERS)):
 		if layer == 0:
-			W.append(0.01 * np.random.randn(LAYERS[layer], n))
-			# W.append(np.random.uniform(-1, 1, size=[LAYERS[layer], n]))
+			W.append(0.1*np.random.randn(LAYERS[layer], n))
 		else:
-			W.append(0.01 * np.random.randn(LAYERS[layer], LAYERS[layer - 1]))
-			# W.append(np.random.uniform(-1, 1, size=[LAYERS[layer], LAYERS[layer - 1]]))
+			W.append(0.1*np.random.randn(LAYERS[layer], LAYERS[layer - 1]))
 		b.append(np.zeros((LAYERS[layer], 1)))
 
-	for arr in b:
-		print(arr.shape)
-	for arr in W:
-		print(arr.shape)
+	# for arr in b:
+	# 	print(arr.shape)
+	# for arr in W:
+	# 	print(arr.shape)
+
+	one_hot_Y = one_hot(Y)
 
 	for epoch in range(1000):
 		output, A = forward_prop(X, W, b)
-		cost = compute_cost(output, one_hot(Y), m)
-		dW, db = backward_prop(A, Y, W, b, m)
-		W, b = update_parameters(W, b, dW, db, 0.1)
-		# print(output)
 		# print(A)
-		# print(cost)
-		# break
+		cost = compute_cost(output, one_hot_Y, m)
+		dW, db = backward_prop(A, one_hot_Y, W, b, m)
+		W, b = update_parameters(W, b, dW, db, 0.1)
+
+		# print(output.T)
+		# print(A)
+
+		# print(W)
+		# print(b)
 		# print(output)
-		# return
 		if epoch % 100 == 0:
-			output = np.argmax(output.T, axis=1)
+			output = np.argmax(output, axis=0)
 			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(output == Y)/len(output):.3f}")
-	# print(predict(X, W, b).T)
-	# return
+
 	pred = np.argmax(predict(X, W, b).T, axis=1)
 	print(np.sum(pred == Y)/len(pred))
 	pd.Series(pred, index=data.index[:10]).map(output_classes).to_csv("ressources/pred.csv", header=None)
