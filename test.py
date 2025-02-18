@@ -3,49 +3,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.datasets import load_digits
 from StandardScaler import StandardScaler
+import activation_functions as af
 
-def tanh(z):
-	return np.tanh(z)
 
-def tanh_derivative(z):
-	return 1 - np.tanh(z) ** 2
-
-def ReLU(z):
-	return np.maximum(0, z)
-
-def ReLU_derivative(z):
-	return z > 0
-
-def sigmoid(z):
-	z = np.clip(z, -709, 709)
-	return 1 / (1 + np.exp(-z))
-
-def sigmoid_derivative(z):
-	return sigmoid(z) * (1 - sigmoid(z))
-
-def softmax(z):
-	z = np.exp(np.clip(z, -709, 709))
-	return z / sum(z)
 
 def forward_prop(X, W, b):
 	A = []
 	A.append(X.values.T)
-	# print(A)
-	# return
 	for i in range(len(W)):
 		z = np.dot(W[i], A[i]) + b[i]
-		# print("WWWWWWWWWWW: ", W[i])
-		# print("AAAAAAAAA: ", A[i])
-		# print("BBBBBBBB: ", b[i])
-		# print(z)
-		A.append(sigmoid(z))
-		# A.append(ReLU(z))
-	return softmax(z), A
+		A.append(af.sigmoid(z))
+	return af.softmax(z), A
 
 def compute_cost(pred, Y, m):
 	pred = np.clip(pred, 1e-10, 1 - 1e-10)
 	return -1 / m * np.sum(Y * np.log(pred) + (1 - Y) * np.log(1 - pred))
-	# return -1 / m * np.sum(Y * np.log(pred))
 
 def backward_prop(A, Y, W, b, m):
 	dW = []
@@ -55,8 +27,7 @@ def backward_prop(A, Y, W, b, m):
 		dW.append(np.dot(delta, A[i].T) / m)
 		db.append(np.sum(delta) / m)
 		if i > 0:
-			delta = np.dot(W[i].T, delta) * sigmoid_derivative(A[i])
-			# delta = np.dot(W[i].T, delta) * ReLU_derivative(A[i])
+			delta = np.dot(W[i].T, delta) * af.sigmoid_derivative(A[i])
 
 	dW.reverse()
 	db.reverse()
@@ -82,8 +53,8 @@ def predict(X, W, b):
 	A.append(X.values.T)
 	for i in range(len(W)):
 		z = np.dot(W[i], A[i]) + b[i]
-		A.append(sigmoid(z))
-	return softmax(A[-1])
+		A.append(af.sigmoid(z))
+	return af.softmax(z)
 
 def main():
 	data = pd.read_csv("ressources/data.csv", index_col=0, header=None)
@@ -94,17 +65,19 @@ def main():
 	data.iloc[:, 1:] = scaler.fit_transform(data.iloc[:, 1:])
 
 	m, n = data.iloc[:, 1:].shape
-	Y = (data.iloc[:, 0] == "M").astype(int)
+	Y = data.iloc[:, 0]
 	X = data.iloc[:, 1:]
 
 	# data.iloc[:, :-1] = scaler.fit_transform(data.iloc[:, :-1])
-	# # data.iloc[:, :-1] = data.iloc[:, :-1] / data.iloc[:, :-1].max()
 	# data = data.fillna(0)
 	# m, n = data.iloc[:, :-1].shape
 	# Y = data.iloc[:, -1]
 	# X = data.iloc[:, :-1]
 
-	LAYERS = [10, 10, 10, 2]
+	output_classes = {i: c for i, c in enumerate(Y.unique())}
+	Y = Y.map({v: k for k, v in output_classes.items()})
+
+	LAYERS = [10, 10, 10, len(Y.unique())]
 	W = []
 	b = []
 
@@ -119,17 +92,17 @@ def main():
 
 	for epoch in range(1000):
 		output, A = forward_prop(X, W, b)
-		# return
 		cost = compute_cost(output, one_hot(Y), m)
 		dW, db = backward_prop(A, Y, W, b, m)
-		W, b = update_parameters(W, b, dW, db, 1)
+		W, b = update_parameters(W, b, dW, db, 3)
 		if epoch % 100 == 0:
 			output = np.argmax(output.T, axis=1)
-			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {(output == Y).value_counts().iloc[0]/len(output):.3f}")
+			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(output == Y)/len(output):.3f}")
 
 	pred = np.argmax(predict(X, W, b).T, axis=1)
-	print(f"{(pred == Y).value_counts().iloc[0]/len(pred):.3f}")
-	pd.DataFrame(np.where(pred == 1, 'M', 'B'), index=data.index).to_csv("ressources/pred.csv", header=None)
+	print(np.sum(pred == Y)/len(pred))
+	pd.Series(pred, index=data.index).map(output_classes).to_csv("ressources/pred.csv", header=None)
+	Y.to_csv("ressources/mdr.csv", header=None)
 
 if __name__ == "__main__":
 	main()
