@@ -13,7 +13,7 @@ def ReLU_derivative(x):
 	return x > 0
 
 def sigmoid(x):
-	x = np.clip(x, -300, 300)
+	x = np.clip(x, -709, 709)
 	return 1 / (1 + np.exp(-x))
 
 def sigmoid_derivative(x):

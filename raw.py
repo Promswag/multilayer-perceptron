@@ -61,7 +61,8 @@ def one_hot(Y, n):
 def main():
 	try:
 		# data = pd.read_csv("ressources/data.csv", index_col=0, header=None)
-		# data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+		data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+		print(data)
 		data = load_digits(as_frame=True)
 		data = pd.DataFrame(data.frame)
 		scaler = StandardScaler()
@@ -71,6 +72,7 @@ def main():
 		Y = data.iloc[:, targetT]
 		output_classes = {i: c for i, c in enumerate(Y.unique())}
 		Y = Y.map({v: k for k, v in output_classes.items()})
+
 
 		X = data.drop(data.columns[targetT], axis=1)
 		X = scaler.fit_transform(X)
@@ -101,7 +103,7 @@ def main():
 				W.append(0.1*np.random.randn(LAYERS[layer], LAYERS[layer - 1]))
 			b.append(np.zeros((LAYERS[layer], 1)))
 
-		for epoch in range(1500):
+		for epoch in range(100):
 			indexes = np.random.permutation(X.index)
 			for i in range(0, m, batch_size):
 				indexes_batch = indexes[i:i + batch_size]
@@ -113,7 +115,7 @@ def main():
 				output, A = forward_prop(X_batch, W, b)
 				cost = compute_cost(output, one_hot_Y, mm)
 				dW, db = backward_prop(A, one_hot_Y, W, mm)
-				W, b = update_parameters(W, b, dW, db, 0.1)
+				W, b = update_parameters(W, b, dW, db, 1)
 
 			if epoch % 10 == 0:
 				output = np.argmax(output, axis=0)
@@ -124,6 +126,10 @@ def main():
 		print(f"{np.sum(output == Y_dev)/len(output):.3f}")
 		pd.DataFrame(output, index=X_dev.index).to_csv("ressources/pred.csv", header=None)
 		Y_dev.to_csv("ressources/mdr.csv", header=None)
+		# for idx, sample in enumerate(X_dev.iloc):
+		# 	plt.imshow(sample.values.reshape(8,8), cmap='gray')
+		# 	plt.title(Y_dev.iloc[idx])
+		# 	plt.show()
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		raise e
