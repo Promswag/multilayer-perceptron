@@ -17,12 +17,13 @@ class MultiLayerPerceptron():
 		self.Y_valid = data_valid.loc[:, target]
 
 	def one_hot(self, Y, m):
-		one_hot_Y = np.zeros(m, self.n_classes)
+		one_hot_Y = np.zeros((m, self.n_classes))
 		one_hot_Y[np.arange(m), Y] = 1
 		one_hot_Y = one_hot_Y.T
 		return one_hot_Y
 	
 	def compute_cost(self, Y_pred, Y_true, m):
+		Y_true = self.one_hot(Y_true, m)
 		epsilon = 1e-10
 		Y_pred = np.clip(Y_pred, epsilon, 1 - epsilon)
 		return - 1 / m * np.sum(Y_true * np.log(Y_pred) + (1 - Y_true) * np.log(1 - Y_pred))
@@ -36,6 +37,7 @@ class DenseLayer():
 			  activation_function: callable,
 			  derivative_function: callable,
 			  weights_initializer: callable):
+		self.n_neurons = n_neurons
 		self.activation_function = activation_function
 		self.derivative_function = derivative_function
 		self.weights = weights_initializer(n_inputs, n_neurons)
@@ -43,15 +45,17 @@ class DenseLayer():
 
 	def forward_propagation(self, inputs):
 		values = np.dot(self.weights, inputs) + self.biases
-		self.outputs = self.activation_function(values)
-		return self.outputs
+		self.saved = values
+		self.forward_outputs = self.activation_function(values)
+		return self.forward_outputs
 
-	def backward_propagation(self, inputs, learning_rate):
+	def backward_propagation(self, inputs, learning_rate, donot:bool=False):
+		print('e')
 		m = len(inputs)
-		dW = np.dot(inputs, self.outputs.T) / m
+		dW = np.dot(inputs, self.forward_outputs.T) / m
 		db = np.sum(inputs, axis=1, keepdims=True) /  m
-		values = np.dot(self.weights.T, self.outputs)
-		self.outputs = self.derivative_function(values)
+		values = np.dot(self.weights.T, inputs)
+		self.backward_outputs = self.derivative_function(values)
 		self.weights -= learning_rate * dW
 		self.biases -= learning_rate * db
-		return self.outputs
+		return self.backward_outputs

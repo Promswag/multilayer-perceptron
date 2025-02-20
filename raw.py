@@ -126,10 +126,10 @@ def main():
 		print(f"{np.sum(output == Y_dev)/len(output):.3f}")
 		pd.DataFrame(output, index=X_dev.index).to_csv("ressources/pred.csv", header=None)
 		Y_dev.to_csv("ressources/mdr.csv", header=None)
-		# for idx, sample in enumerate(X_dev.iloc):
-		# 	plt.imshow(sample.values.reshape(8,8), cmap='gray')
-		# 	plt.title(Y_dev.iloc[idx])
-		# 	plt.show()
+		for idx, sample in enumerate(X_dev.iloc):
+			plt.imshow(sample.values.reshape(8,8), cmap='gray')
+			plt.title(Y_dev.iloc[idx])
+			plt.show()
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		raise e

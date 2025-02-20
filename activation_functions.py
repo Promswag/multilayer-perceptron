@@ -26,4 +26,4 @@ def softmax(x):
 
 def softmax_derivative(x):
 	x = softmax(x)
-	return np.diag(x) - np.outer(x, x)
+	return np.diagflat(x) - np.outer(x, x)
