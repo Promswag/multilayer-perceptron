@@ -99,13 +99,7 @@ def main():
 		output, A = forward_prop(X, W, b)
 		cost = compute_cost(output, one_hot(Y), m)
 		dW, db = backward_prop(A, Y, W, b, m)
-		W, b = update_parameters(W, b, dW, db, 0.1)
-		# print(output)
-		# print(A)
-		# print(cost)
-		# break
-		# print(output)
-		# return
+		W, b = update_parameters(W, b, dW, db, 0.1) 
 		if epoch % 100 == 0:
 			output = np.argmax(output.T, axis=1)
 			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(output == Y)/len(output):.3f}")
