@@ -28,6 +28,7 @@ class StandardScaler():
 			return df
 		for f in self.features:
 			df.loc[:,f] = (df.loc[:,f] - self.mean[f]) / self.std[f]
+			df.loc[:,f] = df.loc[:,f].fillna(0)
 		return df
 
 	def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:

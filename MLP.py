@@ -49,13 +49,21 @@ class DenseLayer():
 		self.forward_outputs = self.activation_function(values)
 		return self.forward_outputs
 
-	def backward_propagation(self, inputs, learning_rate, donot:bool=False):
-		print('e')
+	def backward_propagation(self, inputs:None, one_hot:None=None, W:None=None, Z:None=None):
 		m = len(inputs)
-		dW = np.dot(inputs, self.forward_outputs.T) / m
-		db = np.sum(inputs, axis=1, keepdims=True) /  m
-		values = np.dot(self.weights.T, inputs)
-		self.backward_outputs = self.derivative_function(values)
-		self.weights -= learning_rate * dW
-		self.biases -= learning_rate * db
-		return self.backward_outputs
+
+		if one_hot is not None:
+			dZ = self.forward_outputs - one_hot
+		else:
+			dZ = np.dot(W.T, Z) * self.derivative_function(self.saved)
+
+		dW = np.dot(dZ, inputs.T) / m
+		db = np.sum(dZ, axis=1, keepdims=True) /  m
+
+		self.dW = dW
+		self.db = db
+		self.dZ = dZ
+
+	def update_parameters(self, learning_rate: float = 0.1):
+		self.weights -= learning_rate * self.dW
+		self.biases -= learning_rate * self.db
