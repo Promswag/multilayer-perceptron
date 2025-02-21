@@ -1,20 +1,39 @@
 import numpy as np
 import pandas as pd
+import DenseLayer as dl
 
 class MultiLayerPerceptron():
 	def __init__(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str, layers:int=None):
 		self.init_datasets(data_train, data_valid, target)
 		self.classes = self.Y_train.unique()
 		self.n_classes = len(self.classes)
+		self.n_features = data_train.shape[1] - 1
+		self.layers = []
 
 	def init_datasets(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str):
 		if isinstance(target, int):
 			target = data_train.columns[target]
 		features = data_train.columns.difference([target])
 		self.X_train = data_train.loc[:, features]
-		self.Y_train = data_train.loc[:, target]
+		self.Y_train = data_train.loc[:, target].astype(int)
 		self.X_valid = data_valid.loc[:, features]
-		self.Y_valid = data_valid.loc[:, target]
+		self.Y_valid = data_valid.loc[:, target].astype(int)
+	
+	def init_layers(self):
+		for layer in self.layers:
+			layer.init_weights()
+
+	def add_layer(self, n_neurons: int, activation_function: str, weights_initializer: str):
+		n_layer = len(self.layers)
+		print(n_layer)
+		self.layers.append(
+			dl.DenseLayer(
+				n_inputs=(self.n_features if n_layer == 0 else self.layers[n_layer - 1].n_neurons),
+				n_neurons=(self.n_classes if n_neurons == 0 else n_neurons),
+				activation_function=activation_function,
+				weights_initializer=weights_initializer
+			)
+		)
 
 	def one_hot(self, Y, m):
 		one_hot_Y = np.zeros((m, self.n_classes))
@@ -28,42 +47,7 @@ class MultiLayerPerceptron():
 		Y_pred = np.clip(Y_pred, epsilon, 1 - epsilon)
 		return - 1 / m * np.sum(Y_true * np.log(Y_pred) + (1 - Y_true) * np.log(1 - Y_pred))
 
-	def train():
+	def train(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
+		
 		return
 
-
-class DenseLayer():
-	def __init__(self, n_inputs: int, n_neurons: int,
-			  activation_function: callable,
-			  derivative_function: callable,
-			  weights_initializer: callable):
-		self.n_neurons = n_neurons
-		self.activation_function = activation_function
-		self.derivative_function = derivative_function
-		self.weights = weights_initializer(n_inputs, n_neurons)
-		self.biases = np.zeros((n_neurons, 1))
-
-	def forward_propagation(self, inputs):
-		values = np.dot(self.weights, inputs) + self.biases
-		self.saved = values
-		self.forward_outputs = self.activation_function(values)
-		return self.forward_outputs
-
-	def backward_propagation(self, inputs:None, one_hot:None=None, W:None=None, Z:None=None):
-		m = len(inputs)
-
-		if one_hot is not None:
-			dZ = self.forward_outputs - one_hot
-		else:
-			dZ = np.dot(W.T, Z) * self.derivative_function(self.saved)
-
-		dW = np.dot(dZ, inputs.T) / m
-		db = np.sum(dZ, axis=1, keepdims=True) /  m
-
-		self.dW = dW
-		self.db = db
-		self.dZ = dZ
-
-	def update_parameters(self, learning_rate: float = 0.1):
-		self.weights -= learning_rate * self.dW
-		self.biases -= learning_rate * self.db

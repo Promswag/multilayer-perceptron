@@ -6,7 +6,7 @@ from StandardScaler import StandardScaler
 import activation_functions as af
 
 AF = [
-	[af.ReLU, af.ReLU_derivative],
+	[af.relu, af.relu_derivative],
 	[af.sigmoid, af.sigmoid_derivative],
 	[af.softmax, af.softmax_derivative],
 ]
@@ -61,8 +61,8 @@ def one_hot(Y, n):
 def main():
 	try:
 		# data = pd.read_csv("ressources/data.csv", index_col=0, header=None)
-		data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
-		print(data)
+		# data = pd.read_csv("ressources/test.csv", index_col=0, header=None)
+		# print(data)
 		data = load_digits(as_frame=True)
 		data = pd.DataFrame(data.frame)
 		scaler = StandardScaler()
@@ -128,7 +128,7 @@ def main():
 		Y_dev.to_csv("ressources/mdr.csv", header=None)
 		for idx, sample in enumerate(X_dev.iloc):
 			plt.imshow(sample.values.reshape(8,8), cmap='gray')
-			plt.title(Y_dev.iloc[idx])
+			plt.title(f"{Y_dev.iloc[idx]} {output[idx]}")
 			plt.show()
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
