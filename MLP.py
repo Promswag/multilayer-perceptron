@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import DenseLayer as dl
+import math
 
 class MultiLayerPerceptron():
 	def __init__(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str, layers:int=None):
@@ -9,6 +10,7 @@ class MultiLayerPerceptron():
 		self.n_classes = len(self.classes)
 		self.n_features = data_train.shape[1] - 1
 		self.layers = []
+		self.n_layers = 0
 
 	def init_datasets(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str):
 		if isinstance(target, int):
@@ -24,16 +26,15 @@ class MultiLayerPerceptron():
 			layer.init_weights()
 
 	def add_layer(self, n_neurons: int, activation_function: str, weights_initializer: str):
-		n_layer = len(self.layers)
-		print(n_layer)
 		self.layers.append(
 			dl.DenseLayer(
-				n_inputs=(self.n_features if n_layer == 0 else self.layers[n_layer - 1].n_neurons),
+				n_inputs=(self.n_features if self.n_layers == 0 else self.layers[self.n_layers - 1].n_neurons),
 				n_neurons=(self.n_classes if n_neurons == 0 else n_neurons),
 				activation_function=activation_function,
 				weights_initializer=weights_initializer
 			)
 		)
+		self.n_layers += 1
 
 	def one_hot(self, Y, m):
 		one_hot_Y = np.zeros((m, self.n_classes))
@@ -48,6 +49,28 @@ class MultiLayerPerceptron():
 		return - 1 / m * np.sum(Y_true * np.log(Y_pred) + (1 - Y_true) * np.log(1 - Y_pred))
 
 	def train(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
-		
-		return
+		if batch_size == 0:
+			batch_size = len(self.X_train)
+		ratio = math.ceil(epochs / batch_size)
+
+		for epoch in range(epochs):
+			i = epoch % ratio
+			if i == 0:
+				indexes = np.random.permutation(self.X_train.index)
+			indexes_batch = indexes[i:i + batch_size]
+			m = len(indexes_batch)
+			X_batch = self.X_train.loc[indexes_batch].T
+			Y_batch = self.Y_train.loc[indexes_batch]
+
+			for idx, layer in self.layers:
+				layer.forward_propagation(X_batch if idx == 0 else self.layers[idx - 1])
+			
+			cost = self.compute_cost(self.layers[-1], Y_batch, m)
+
+			for idx, layer in self.layers:
+				layer.backward_propagation(
+					self.layers[-1 - idx].forward_outputs
+				)
+
+	def backward_propagation(self, inputs:None, one_hot:None=None, W:None=None, Z:None=None):
 

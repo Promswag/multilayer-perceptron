@@ -52,51 +52,56 @@ def main():
 	X_test = test.loc[:, features]
 	Y_test = test.loc[:, target_col].astype(int)
 
-	model.train()
+	model.train(
+		epochs=100,
+		learning_rate=0.01,
+		batch_size=8,
+		loss='binaryCrossentropy'
+	)
 
 	batch_size = 30
 	learning_rate = 0.01
 
-	# for epoch in range(1000):
-	# 	indexes = np.random.permutation(X_train.index)
-	# 	for i in range(0, len(indexes), batch_size):
-	# 		indexes_batch = indexes[i:i + batch_size]
-	# 		mm = len(indexes_batch)
-	# 		X_batch = X_train.loc[indexes_batch].T
-	# 		Y_batch = Y_train.loc[indexes_batch]
-	# 		layer1.forward_propagation(X_batch)
-	# 		layer2.forward_propagation(layer1.forward_outputs)
-	# 		l_out.forward_propagation(layer2.forward_outputs)
+	for epoch in range(1000):
+		indexes = np.random.permutation(X_train.index)
+		for i in range(0, len(indexes), batch_size):
+			indexes_batch = indexes[i:i + batch_size]
+			mm = len(indexes_batch)
+			X_batch = X_train.loc[indexes_batch].T
+			Y_batch = Y_train.loc[indexes_batch]
+			layer1.forward_propagation(X_batch)
+			layer2.forward_propagation(layer1.forward_outputs)
+			l_out.forward_propagation(layer2.forward_outputs)
 			
-	# 		oh = model.one_hot(Y_batch, mm)
+			oh = model.one_hot(Y_batch, mm)
 
-	# 		l_out.backward_propagation(
-	# 			inputs=layer2.forward_outputs,
-	# 			one_hot=oh)
-	# 		layer2.backward_propagation(
-	# 			inputs=layer1.forward_outputs,
-	# 			W=l_out.weights,
-	# 			Z=l_out.dZ)
-	# 		layer1.backward_propagation(
-	# 			inputs=X_batch,
-	# 			W=layer2.weights,
-	# 			Z=layer2.dZ)
+			l_out.backward_propagation(
+				inputs=layer2.forward_outputs,
+				one_hot=oh)
+			layer2.backward_propagation(
+				inputs=layer1.forward_outputs,
+				W=l_out.weights,
+				Z=l_out.dZ)
+			layer1.backward_propagation(
+				inputs=X_batch,
+				W=layer2.weights,
+				Z=layer2.dZ)
 			
-	# 		layer1.update_parameters(learning_rate)
-	# 		layer2.update_parameters(learning_rate)
-	# 		l_out.update_parameters(learning_rate)
+			layer1.update_parameters(learning_rate)
+			layer2.update_parameters(learning_rate)
+			l_out.update_parameters(learning_rate)
 			
-	# 	cost = model.compute_cost(l_out.forward_outputs, Y_batch, mm)
-	# 	if epoch % 10 == 0:
-	# 		Y_pred = np.argmax(l_out.forward_outputs, axis=0)
-	# 		print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(Y_pred == Y_batch)/len(Y_pred):.3f}")
+		cost = model.compute_cost(l_out.forward_outputs, Y_batch, mm)
+		if epoch % 10 == 0:
+			Y_pred = np.argmax(l_out.forward_outputs, axis=0)
+			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(Y_pred == Y_batch)/len(Y_pred):.3f}")
 
-	# 		layer1.forward_propagation(X_test.T)
-	# 		layer2.forward_propagation(layer1.forward_outputs)
-	# 		l_out.forward_propagation(layer2.forward_outputs)
-	# 		Y_pred = np.argmax(l_out.forward_outputs, axis=0)
-	# 		print(f"Accuracy {np.sum(Y_pred == Y_test)/len(Y_pred):.3f}")
-	# pd.DataFrame(Y_pred, index=X_test.index).to_csv("ressources/pred.csv", header=None)
-	# Y_test.to_csv("ressources/mdr.csv", header=None)
+			layer1.forward_propagation(X_test.T)
+			layer2.forward_propagation(layer1.forward_outputs)
+			l_out.forward_propagation(layer2.forward_outputs)
+			Y_pred = np.argmax(l_out.forward_outputs, axis=0)
+			print(f"Accuracy {np.sum(Y_pred == Y_test)/len(Y_pred):.3f}")
+	pd.DataFrame(Y_pred, index=X_test.index).to_csv("ressources/pred.csv", header=None)
+	Y_test.to_csv("ressources/mdr.csv", header=None)
 if __name__ == "__main__":
 	main()
