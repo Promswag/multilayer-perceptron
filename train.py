@@ -1,107 +1,122 @@
-import numpy as np
 import pandas as pd
 from train_test_split import train_test_split
 from sklearn.datasets import load_digits
-import activation_functions as af
-import weights_initializer as wi
 import StandardScaler
 import MLP
 import json
+import sys
+import os
 
+def load_config():
+	config_path = input("Enter the path to the config file: ").strip()
+	if not os.path.exists(config_path):
+		print(f"File {config_path} does not exist.")
+		return None
+	try:
+		with open(config_path, 'r') as file:
+			config = json.load(file)
+		return config
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+		return None
 
+def split_dataset():
+	dataset_path = input("Enter the path to the dataset: ").strip()
+	target = input("Enter the target label or index: ").strip()
+	validation_split = input("Enter the validation split: ").strip()
+
+	try:
+		validation_split = float(validation_split)
+		if validation_split < 0 or validation_split > 1:
+			raise ValueError("Validation split must be between 0 and 1")
+		
+		sample = pd.read_csv(dataset_path, index_col=0, nrows=5)
+		if all(isinstance(v, str) for v in sample.columns):
+			header = 0
+		else:
+			header = None
+		df = pd.read_csv(dataset_path, index_col=0, header=header)
+
+		try:
+			target = int(target)
+		except:
+			pass
+
+		train, valid = train_test_split(df, target, float(validation_split))
+		train.to_csv(dataset_path[:-4] + '_train.csv')
+		print(f"Training data with shape {train.shape} saved as {dataset_path[:-4]}_train.csv ")
+		valid.to_csv(dataset_path[:-4] + '_valid.csv')
+		print(f"Validation data with shape {valid.shape} saved as {dataset_path[:-4]}_valid.csv")
+		return train, valid
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+		return None
+
+def train_model(train, valid, config):
+	try:
+		if train is None or valid is None or config is None:
+			raise ValueError("Please split the dataset and load the config file first.")
+		
+		target = config["model"]["target"]
+		if isinstance(target, int):
+			target = train.columns[target]
+		output_classes = {i: c for i, c in enumerate(train.loc[:, target].unique())}
+		numeric_features = train.select_dtypes(include='number').columns.difference([target])
+
+		scaler = StandardScaler.StandardScaler()
+		train.loc[:, numeric_features] = scaler.fit_transform(train.loc[:, numeric_features])
+		train.loc[:, numeric_features] = train.loc[:, numeric_features].fillna(0)
+		train.loc[:, target] = train.loc[:, target].map({v: k for k, v in output_classes.items()}).astype(int)
+		valid.loc[:, numeric_features] = scaler.transform(valid.loc[:, numeric_features])
+		valid.loc[:, numeric_features] = valid.loc[:, numeric_features].fillna(0)
+		valid.loc[:, target] = valid.loc[:, target].map({v: k for k, v in output_classes.items()}).astype(int)
+
+		model = MLP.MultiLayerPerceptron(train, valid, target)
+		for layer in config["network"]["layers"]:
+			model.add_layer(
+				n_neurons=layer["n_neurons"],
+				activation_function=layer["activation_function"],
+				weights_initializer=layer["weights_initializer"])
+
+		model.init_layers()
+
+		model.train(
+			epochs=config["model"]["epochs"],
+			learning_rate=config["model"]["learning_rate"],
+			batch_size=config["model"]["batch_size"],
+			loss=config["model"]["loss"]
+		)
+		return model, scaler
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+
+def predict(model, scaler):
+	pass
 
 def main():
-	# df = pd.read_csv("ressources/data.csv", index_col=0, header=None)
-	df = pd.DataFrame(load_digits(as_frame=True).frame)
-	config_path = "ressources/config.json"
+	train, valid = None, None
+	config = None
+	try:
+		if len(sys.argv) == 2:
+			with open(sys.argv[1], 'r') as file:
+				config = json.load(file)
 
-	with open(config_path, 'r') as file:
-		config = json.load(file)
+		while(True):
+			print("[1] Split dataset - [2] Train model - [3] Predict - [4] Load network config")
+			choice = input("Enter your choice: ").strip()
+			if choice == '1':
+				train, valid = split_dataset()
+			elif choice == '2':
+				model, scaler = train_model(train, valid, config)
+			elif choice == '3':
+				predict(model, scaler)
+			elif choice == '4':
+				config = load_config()
+			elif choice == 'exit' or choice == 'quit' or choice == 'q':
+				return
 
-	print(type(config["model"]["target"]))
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
 
-	target = config["model"]["target"]
-
-	target_col = target	
-	if isinstance(target, int):
-		target_col = df.columns[target]
-	output_classes = {i: c for i, c in enumerate(df.loc[:, target_col].unique())}
-
-	numeric_features = df.select_dtypes(include='number').columns.difference([target])
-	scaler = StandardScaler.StandardScaler()
-	df.loc[:, numeric_features] = scaler.fit_transform(df.loc[:, numeric_features])
-	df.loc[:, numeric_features] = df.loc[:, numeric_features].fillna(0)
-
-	n_classes = len(output_classes)
-	df.loc[:, target_col] = df.loc[:, target_col].map({v: k for k, v in output_classes.items()}).astype(int)
-	m, n = df.shape[0], df.shape[1] - 1
-
-	train, test = train_test_split(df, target, 0.2)
-
-	model = MLP.MultiLayerPerceptron(train, test, target)
-	for layer in config["network"]["layers"]:
-		print(layer)
-		model.add_layer(
-			n_neurons=layer["n_neurons"],
-			activation_function=layer["activation_function"],
-			weights_initializer=layer["weights_initializer"])
-
-	features = train.columns.difference([target_col])
-	X_train = train.loc[:, features]
-	Y_train = train.loc[:, target_col].astype(int)
-	X_test = test.loc[:, features]
-	Y_test = test.loc[:, target_col].astype(int)
-
-	model.train(
-		epochs=100,
-		learning_rate=0.01,
-		batch_size=8,
-		loss='binaryCrossentropy'
-	)
-
-	batch_size = 30
-	learning_rate = 0.01
-
-	for epoch in range(1000):
-		indexes = np.random.permutation(X_train.index)
-		for i in range(0, len(indexes), batch_size):
-			indexes_batch = indexes[i:i + batch_size]
-			mm = len(indexes_batch)
-			X_batch = X_train.loc[indexes_batch].T
-			Y_batch = Y_train.loc[indexes_batch]
-			layer1.forward_propagation(X_batch)
-			layer2.forward_propagation(layer1.forward_outputs)
-			l_out.forward_propagation(layer2.forward_outputs)
-			
-			oh = model.one_hot(Y_batch, mm)
-
-			l_out.backward_propagation(
-				inputs=layer2.forward_outputs,
-				one_hot=oh)
-			layer2.backward_propagation(
-				inputs=layer1.forward_outputs,
-				W=l_out.weights,
-				Z=l_out.dZ)
-			layer1.backward_propagation(
-				inputs=X_batch,
-				W=layer2.weights,
-				Z=layer2.dZ)
-			
-			layer1.update_parameters(learning_rate)
-			layer2.update_parameters(learning_rate)
-			l_out.update_parameters(learning_rate)
-			
-		cost = model.compute_cost(l_out.forward_outputs, Y_batch, mm)
-		if epoch % 10 == 0:
-			Y_pred = np.argmax(l_out.forward_outputs, axis=0)
-			print(f"Epoch {epoch} - Cost {cost:.5f} - Accuracy {np.sum(Y_pred == Y_batch)/len(Y_pred):.3f}")
-
-			layer1.forward_propagation(X_test.T)
-			layer2.forward_propagation(layer1.forward_outputs)
-			l_out.forward_propagation(layer2.forward_outputs)
-			Y_pred = np.argmax(l_out.forward_outputs, axis=0)
-			print(f"Accuracy {np.sum(Y_pred == Y_test)/len(Y_pred):.3f}")
-	pd.DataFrame(Y_pred, index=X_test.index).to_csv("ressources/pred.csv", header=None)
-	Y_test.to_csv("ressources/mdr.csv", header=None)
 if __name__ == "__main__":
 	main()

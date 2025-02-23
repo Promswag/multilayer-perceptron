@@ -17,11 +17,7 @@ WI = {
 }
 
 class DenseLayer():
-	def __init__(self,
-			  n_inputs: int,
-			  n_neurons: int,
-			  activation_function: str,
-			  weights_initializer: str):
+	def __init__(self, n_inputs: int, n_neurons: int, activation_function: str, weights_initializer: str):
 		self.n_inputs = n_inputs
 		self.n_neurons = n_neurons
 		self.activation_function = AF[activation_function][0]

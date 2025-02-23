@@ -1,0 +1,31 @@
+{
+	"network": {
+		"layers": [
+			{
+				"n_neurons": 10,
+				"activation_function": "ReLU",
+				"weights_initializer": "HeNormal"
+			},
+			{
+				"n_neurons": 10,
+				"activation_function": "ReLU",
+				"weights_initializer": "HeUniform"
+			},
+			{
+				"n_neurons": 0,
+				"activation_function": "softmax",
+				"weights_initializer": "HeNormal"
+			}
+		]
+	},
+	"model": {
+		"dataset_train": "",
+		"dataset_valid": "",
+		"target": 0,
+		"learning_rate": 0.034,
+		"batch_size": 8,
+		"epochs": 100,
+		"loss": "categorical_crossentropy",
+		"seed": 42
+	}
+}
