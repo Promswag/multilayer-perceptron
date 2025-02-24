@@ -24,9 +24,22 @@ class DenseLayer():
 		self.derivative_function = AF[activation_function][1]
 		self.weights_initializer = WI[weights_initializer]
 
+		#Adam optimizer
+		self.beta1 = 0.9
+		self.beta2 = 0.999
+		self.epsilon = 1e-8
+		self.t = 0
+
+
 	def init_weights(self):
 		self.weights = self.weights_initializer(self.n_inputs, self.n_neurons)
 		self.biases = np.zeros((self.n_neurons, 1))
+
+		#Adam optimizer
+		self.mW = np.zeros_like(self.weights)
+		self.vW = np.zeros_like(self.weights)
+		self.mb = np.zeros_like(self.biases)
+		self.vb = np.zeros_like(self.biases)
 
 	def forward_propagation(self, inputs):
 		values = np.dot(self.weights, inputs) + self.biases
@@ -52,3 +65,18 @@ class DenseLayer():
 	def update_parameters(self, learning_rate: float = 0.1):
 		self.weights -= learning_rate * self.dW
 		self.biases -= learning_rate * self.db
+
+	def update_parameters_adam(self, learning_rate: float = 0.1):
+		self.t += 1
+		self.mW = self.beta1 * self.mW + (1 - self.beta1) * self.dW
+		self.vW = self.beta2 * self.vW + (1 - self.beta2) * (self.dW ** 2)
+		self.mb = self.beta1 * self.mb + (1 - self.beta1) * self.db
+		self.vb = self.beta2 * self.vb + (1 - self.beta2) * (self.db ** 2)
+
+		mW_hat = self.mW / (1 - self.beta1 ** self.t)
+		vW_hat = self.vW / (1 - self.beta2 ** self.t)
+		mb_hat = self.mb / (1 - self.beta1 ** self.t)
+		vb_hat = self.vb / (1 - self.beta2 ** self.t)
+
+		self.weights -= learning_rate * mW_hat / (np.sqrt(vW_hat) + self.epsilon)
+		self.biases -= learning_rate * mb_hat / (np.sqrt(vb_hat) + self.epsilon)

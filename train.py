@@ -20,6 +20,20 @@ def load_config():
 		print(f"{type(e).__name__}: {e}")
 		return None
 
+def load_dataset(dataset_path):
+	try:
+		sample = pd.read_csv(dataset_path, index_col=0, nrows=5)
+		if all(isinstance(v, str) for v in sample.columns):
+			header = 0
+		else:
+			header = None
+		df = pd.read_csv(dataset_path, index_col=0, header=header)
+		return df
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+		return None
+
+
 def split_dataset():
 	dataset_path = input("Enter the path to the dataset: ").strip()
 	target = input("Enter the target label or index: ").strip()
@@ -30,12 +44,7 @@ def split_dataset():
 		if validation_split < 0 or validation_split > 1:
 			raise ValueError("Validation split must be between 0 and 1")
 		
-		sample = pd.read_csv(dataset_path, index_col=0, nrows=5)
-		if all(isinstance(v, str) for v in sample.columns):
-			header = 0
-		else:
-			header = None
-		df = pd.read_csv(dataset_path, index_col=0, header=header)
+		df = load_dataset(dataset_path)
 
 		try:
 			target = int(target)
@@ -50,7 +59,7 @@ def split_dataset():
 		return train, valid
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
-		return None
+		return None, None
 
 def train_model(train, valid, config):
 	try:
@@ -60,16 +69,11 @@ def train_model(train, valid, config):
 		target = config["model"]["target"]
 		if isinstance(target, int):
 			target = train.columns[target]
-		output_classes = {i: c for i, c in enumerate(train.loc[:, target].unique())}
 		numeric_features = train.select_dtypes(include='number').columns.difference([target])
 
 		scaler = StandardScaler.StandardScaler()
 		train.loc[:, numeric_features] = scaler.fit_transform(train.loc[:, numeric_features])
-		train.loc[:, numeric_features] = train.loc[:, numeric_features].fillna(0)
-		train.loc[:, target] = train.loc[:, target].map({v: k for k, v in output_classes.items()}).astype(int)
 		valid.loc[:, numeric_features] = scaler.transform(valid.loc[:, numeric_features])
-		valid.loc[:, numeric_features] = valid.loc[:, numeric_features].fillna(0)
-		valid.loc[:, target] = valid.loc[:, target].map({v: k for k, v in output_classes.items()}).astype(int)
 
 		model = MLP.MultiLayerPerceptron(train, valid, target)
 		for layer in config["network"]["layers"]:
@@ -89,12 +93,25 @@ def train_model(train, valid, config):
 		return model, scaler
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
+		raise e
+		return None, None
 
 def predict(model, scaler):
-	pass
+	try:
+		if model is None or scaler is None:
+			raise ValueError("Please train the model first.")
+		dataset_path = input("Enter the path to the dataset: ").strip()
+		df = load_dataset(dataset_path)
+		features = model.features
+		df[features] = scaler.transform(df[features])
+		model.predict(df[features])
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+		return
 
 def main():
 	train, valid = None, None
+	model, scaler = None, None
 	config = None
 	try:
 		if len(sys.argv) == 2:
@@ -117,6 +134,7 @@ def main():
 
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
+		raise e
 
 if __name__ == "__main__":
 	main()
