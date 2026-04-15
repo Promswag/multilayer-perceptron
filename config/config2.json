@@ -2,14 +2,14 @@
 	"network": {
 		"layers": [
 			{
-				"n_neurons": 16,
+				"n_neurons": 8,
 				"activation_function": "ReLU",
 				"weights_initializer": "HeNormal"
 			},
 			{
-				"n_neurons": 16,
+				"n_neurons": 8,
 				"activation_function": "ReLU",
-				"weights_initializer": "HeUniform"
+				"weights_initializer": "HeNormal"
 			},
 			{
 				"n_neurons": 0,
@@ -21,13 +21,12 @@
 	"model": {
 		"dataset_train": "",
 		"dataset_valid": "",
-		"target": 0,
-		"learning_rate": 0.001,
-		"batch_size": 8,
+		"target": "target",
+		"learning_rate": 0.01,
+		"batch_size": 20,
 		"epochs": 100,
-		"loss": "binary_crossentropy",
+		"loss": "categorical_crossentropy",
 		"metrics": ["accuracy"],
-		"seed": 42,
-		"early_stopping_patience": 10 
+		"seed": 42
 	}
 }

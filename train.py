@@ -75,16 +75,23 @@ def train_model(train, valid, config):
 		train.loc[:, numeric_features] = scaler.fit_transform(train.loc[:, numeric_features])
 		valid.loc[:, numeric_features] = scaler.transform(valid.loc[:, numeric_features])
 
-		model = MLP.MultiLayerPerceptron(train, valid, target)
+		model = MLP.MultiLayerPerceptron(train, valid, target, config["model"]["early_stopping_patience"])
 		for layer in config["network"]["layers"]:
 			model.add_layer(
 				n_neurons=layer["n_neurons"],
 				activation_function=layer["activation_function"],
 				weights_initializer=layer["weights_initializer"])
 
-		model.init_layers()
+		# model.init_layers()
 
 		model.train(
+			epochs=config["model"]["epochs"],
+			learning_rate=config["model"]["learning_rate"],
+			batch_size=config["model"]["batch_size"],
+			loss=config["model"]["loss"]
+		)
+
+		model.animation(
 			epochs=config["model"]["epochs"],
 			learning_rate=config["model"]["learning_rate"],
 			batch_size=config["model"]["batch_size"],

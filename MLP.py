@@ -1,16 +1,24 @@
 import numpy as np
 import pandas as pd
 import DenseLayer as dl
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import copy
 
 class MultiLayerPerceptron():
-	def __init__(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str):
+	def __init__(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str, early_stopping_patience: int=None):
 		self.classes = {i: c for i, c in enumerate(data_train.loc[:, target].unique())}
 		self.n_classes = len(self.classes)
 		self.init_datasets(data_train, data_valid, target)
 		self.n_features = data_train.shape[1] - 1
 		self.layers = []
 		self.n_layers = 0
+
+		#Early Stopping
+		self.early_stopping_patience = early_stopping_patience
+		self.early_stopping_counter = 0
+		self.early_stopping_best = np.inf
+		self.early_stopping_best_layers = None
 
 	def init_datasets(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str):
 		if isinstance(target, int):
@@ -58,8 +66,148 @@ class MultiLayerPerceptron():
 			return - 1 / m * np.sum(Y_true * np.log(Y_pred) + (1 - Y_true) * np.log(1 - Y_pred))
 		else:
 			raise ValueError(f"Loss function {loss} not supported")
+		
+	def early_stopping_handler(self, Y: pd.DataFrame, layers:dl.DenseLayer, loss:str):
+		output = layers[-1].forward_outputs
+		cost = self.compute_cost(output, Y, len(Y), loss)
+		if cost < self.early_stopping_best:
+			self.early_stopping_best = cost
+			self.early_stopping_counter = 0
+			self.early_stopping_best_layers = copy.deepcopy(layers)
+		else:
+			self.early_stopping_counter += 1
+			if self.early_stopping_counter == self.early_stopping_patience:
+				return False
+		return True
+		
+	def animation(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
+		self.init_layers()
+		if batch_size == 0:
+			batch_size = len(self.X_train)
+		
+		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+		fig.suptitle('Training Neural Network')
+		
+		ax1.set_xlabel('Epochs')
+		ax1.set_ylabel('Loss')
+		ax2.set_xlabel('Epochs')
+		ax2.set_ylabel('Accuracy')
+
+		# ax1b = ax1.twiny()
+		# ax2b = ax2.twiny()
+		# ax1b.set_xticklabels([])
+		# ax1b.set_xticks([])
+		# ax2b.set_xticklabels([])
+		# ax2b.set_xticks([])
+
+		loss_train_line, = ax1.plot([], [], label='Training Loss', color='blue')
+		loss_valid_line, = ax1.plot([], [], label='Validation Loss', color='orange')
+		# loss_batch_line, = ax1b.plot([], [], label='Batch Loss', color='green', alpha=0.5, linewidth=0.1)
+		loss_train_adam_line, = ax1.plot([], [], label='Training Loss ADAM', color='red')
+		loss_valid_adam_line, = ax1.plot([], [], label='Validation Loss ADAM', color='purple')
+
+		accuracy_train_line, = ax2.plot([], [], label='Training Accuracy', color='blue')
+		accuracy_valid_line, = ax2.plot([], [], label='Validation Accuracy', color='orange')
+		# accuracy_batch_line, = ax2b.plot([], [], label='Batch Accuracy', color='green', alpha=0.5, linewidth=0.1)
+		accuracy_train_adam_line, = ax2.plot([], [], label='Training Accuracy ADAM', color='red')
+		accuracy_valid_adam_line, = ax2.plot([], [], label='Validation Accuracy ADAM', color='purple')
+
+		ax1.legend()
+		ax2.legend()
+		ax1.grid()
+		ax2.grid()
+		# ax1b.legend()
+		# ax2b.legend()
+
+		self.loss_train = []
+		self.loss_valid = []
+		# self.loss_batch = []
+		self.loss_train_adam = []
+		self.loss_valid_adam = []
+		self.accuracy_train = []
+		self.accuracy_valid = []
+		# self.accuracy_batch = []
+		self.accuracy_train_adam = []
+		self.accuracy_valid_adam = []
+
+		def frame_update(epoch):
+			indexes = np.random.permutation(self.X_train.index)
+			for i in range(0, len(self.X_train), batch_size):
+				indexes_batch = indexes[i:i + batch_size]
+				X_batch = self.X_train.loc[indexes_batch].T
+				Y_batch = self.Y_train.loc[indexes_batch]
+
+				self.layers = self.forward_propagation(X_batch, self.layers)
+				self.adam_layers = self.forward_propagation(X_batch, self.adam_layers)
+
+				# self.loss_batch.append(self.compute_cost(self.layers[-1].forward_outputs, Y_batch, len(Y_batch), loss))
+				# self.accuracy_batch.append(np.sum(np.argmax(self.layers[-1].forward_outputs, axis=0) == Y_batch)/len(Y_batch))
+
+				self.layers = self.backward_propagation(X_batch, Y_batch, self.layers)
+				self.adam_layers = self.backward_propagation(X_batch, Y_batch, self.adam_layers)
+
+				for layer in self.layers:
+					layer.update_parameters(learning_rate)
+				for layer in self.adam_layers:
+					layer.update_parameters_adam(learning_rate)
+
+
+			bgd = self.forward_propagation(self.X_train.T, self.layers)[-1].forward_outputs
+			cost_train = self.compute_cost(bgd, self.Y_train, len(self.Y_train), loss)
+			Y_train_pred = np.argmax(bgd, axis=0)
+			bgd_valid = self.forward_propagation(self.X_valid.T, self.layers)[-1].forward_outputs
+			cost_valid = self.compute_cost(bgd_valid, self.Y_valid, len(self.Y_valid), loss)
+			Y_val_pred = np.argmax(bgd_valid, axis=0)
+
+			adam = self.forward_propagation(self.X_train.T, self.adam_layers)[-1].forward_outputs
+			cost_train_adam = self.compute_cost(adam, self.Y_train, len(self.Y_train), loss)
+			Y_train_pred_adam = np.argmax(adam, axis=0)
+			adam_valid = self.forward_propagation(self.X_valid.T, self.adam_layers)[-1].forward_outputs
+			cost_valid_adam = self.compute_cost(adam_valid, self.Y_valid, len(self.Y_valid), loss)
+			Y_val_pred_adam = np.argmax(adam_valid, axis=0)
+
+			if self.early_stopping_patience is not None:
+				if not self.early_stopping_handler(self.Y_valid, self.adam_layers, loss):
+					anim.event_source.stop()
+					return
+				
+			self.loss_train.append(cost_train)
+			self.loss_valid.append(cost_valid)
+			self.loss_train_adam.append(cost_train_adam)
+			self.loss_valid_adam.append(cost_valid_adam)
+
+			self.accuracy_train.append(np.sum(Y_train_pred == self.Y_train)/len(Y_train_pred))
+			self.accuracy_valid.append(np.sum(Y_val_pred == self.Y_valid)/len(Y_val_pred))
+			self.accuracy_train_adam.append(np.sum(Y_train_pred_adam == self.Y_train)/len(Y_train_pred_adam))
+			self.accuracy_valid_adam.append(np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam))
+
+			loss_train_line.set_data(range(0, len(self.loss_train)), self.loss_train)
+			loss_valid_line.set_data(range(0, len(self.loss_valid)), self.loss_valid)
+			# loss_batch_line.set_data(range(0, len(self.loss_batch)), self.loss_batch)
+			loss_train_adam_line.set_data(range(0, len(self.loss_train_adam)), self.loss_train_adam)
+			loss_valid_adam_line.set_data(range(0, len(self.loss_valid_adam)), self.loss_valid_adam)
+			accuracy_train_line.set_data(range(0, len(self.accuracy_train)), self.accuracy_train)
+			accuracy_valid_line.set_data(range(0, len(self.accuracy_valid)), self.accuracy_valid)
+			# accuracy_batch_line.set_data(range(0, len(self.accuracy_batch)), self.accuracy_batch)
+			accuracy_train_adam_line.set_data(range(0, len(self.accuracy_train_adam)), self.accuracy_train_adam)
+			accuracy_valid_adam_line.set_data(range(0, len(self.accuracy_valid_adam)), self.accuracy_valid_adam)
+
+			ax1.set_xlim(0, len(self.loss_train))
+			ax2.set_xlim(0, len(self.accuracy_train))
+			# ax1b.set_xlim(0, len(self.loss_batch))
+			# ax2b.set_xlim(0, len(self.accuracy_batch))
+
+			ax1.set_ylim(0, max(max(self.loss_train), max(self.loss_valid), max(self.loss_train_adam), max(self.loss_valid_adam)))
+			ax2.set_ylim(min(min(self.accuracy_train), min(self.accuracy_valid), min(self.accuracy_train_adam), min(self.accuracy_valid_adam)), 1)
+
+			return loss_train_line, loss_valid_line, loss_train_adam_line, loss_valid_adam_line, accuracy_train_line, accuracy_valid_line, accuracy_train_adam_line, accuracy_valid_adam_line
+
+		anim = animation.FuncAnimation(fig, frame_update, frames=epochs, interval=1, repeat=False, blit=False)
+		plt.show(block=True)
+		return
 
 	def train(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
+		self.init_layers()
 		if batch_size == 0:
 			batch_size = len(self.X_train)
 
@@ -68,68 +216,38 @@ class MultiLayerPerceptron():
 
 			for i in range(0, len(self.X_train), batch_size):
 				indexes_batch = indexes[i:i + batch_size]
-				m = len(indexes_batch)
 				X_batch = self.X_train.loc[indexes_batch].T
 				Y_batch = self.Y_train.loc[indexes_batch]
 
-				for idx, layer in enumerate(self.layers):
-					layer.forward_propagation(X_batch if idx == 0 else self.layers[idx - 1].forward_outputs)
-				for idx, layer in enumerate(self.adam_layers):
-					layer.forward_propagation(X_batch if idx == 0 else self.adam_layers[idx - 1].forward_outputs)
+				self.layers = self.forward_propagation(X_batch, self.layers)
+				self.adam_layers = self.forward_propagation(X_batch, self.adam_layers)
 
-				# self.layers = self.forward_propagation(X_batch, self.layers)
-				# self.adam_layers = self.forward_propagation(X_batch, self.adam_layers)
-				# self.layers = self.backward_propagation(X_batch, Y_batch, self.layers)
-				# self.adam_layers = self.backward_propagation(X_batch, Y_batch, self.adam_layers)
-
-				for i in range(self.n_layers -1, -1, -1):
-					inputs = X_batch if i == 0 else self.layers[i - 1].forward_outputs
-
-					if i == self.n_layers - 1:
-						self.layers[i].backward_propagation(
-							inputs=inputs,
-							one_hot=self.one_hot(Y_batch, m)
-						)
-					else:
-						self.layers[i].backward_propagation(
-							inputs=inputs,
-							W=self.layers[i + 1].weights,
-							Z=self.layers[i + 1].dZ
-						)
-				
-				for i in range(self.n_layers -1, -1, -1):
-					inputs = X_batch if i == 0 else self.adam_layers[i - 1].forward_outputs
-
-					if i == self.n_layers - 1:
-						self.adam_layers[i].backward_propagation(
-							inputs=inputs,
-							one_hot=self.one_hot(Y_batch, m)
-						)
-					else:
-						self.adam_layers[i].backward_propagation(
-							inputs=inputs,
-							W=self.adam_layers[i + 1].weights,
-							Z=self.adam_layers[i + 1].dZ
-						)
+				self.layers = self.backward_propagation(X_batch, Y_batch, self.layers)
+				self.adam_layers = self.backward_propagation(X_batch, Y_batch, self.adam_layers)
 
 				for layer in self.layers:
 					layer.update_parameters(learning_rate)
 				for layer in self.adam_layers:
 					layer.update_parameters_adam(learning_rate)
 
-			bgd = self.forward_propagation(self.X_train, self.layers)[-1].forward_outputs
+
+			bgd = self.forward_propagation(self.X_train.T, self.layers)[-1].forward_outputs
 			cost_train = self.compute_cost(bgd, self.Y_train, len(self.Y_train), loss)
 			Y_train_pred = np.argmax(bgd, axis=0)
-			bgd_valid = self.forward_propagation(self.X_valid, self.layers)[-1].forward_outputs
+			bgd_valid = self.forward_propagation(self.X_valid.T, self.layers)[-1].forward_outputs
 			cost_valid = self.compute_cost(bgd_valid, self.Y_valid, len(self.Y_valid), loss)
 			Y_val_pred = np.argmax(bgd_valid, axis=0)
 
-			adam = self.forward_propagation(self.X_train, self.adam_layers)[-1].forward_outputs
+			adam = self.forward_propagation(self.X_train.T, self.adam_layers)[-1].forward_outputs
 			cost_train_adam = self.compute_cost(adam, self.Y_train, len(self.Y_train), loss)
 			Y_train_pred_adam = np.argmax(adam, axis=0)
-			adam_valid = self.forward_propagation(self.X_valid, self.adam_layers)[-1].forward_outputs
+			adam_valid = self.forward_propagation(self.X_valid.T, self.adam_layers)[-1].forward_outputs
 			cost_valid_adam = self.compute_cost(adam_valid, self.Y_valid, len(self.Y_valid), loss)
 			Y_val_pred_adam = np.argmax(adam_valid, axis=0)
+
+			if self.early_stopping_patience is not None:
+				if not self.early_stopping_handler(self.Y_valid, self.adam_layers, loss):
+					break
 
 			print("Epoch {} - Training Cost {} - Validation Cost {} - Training Accuracy {} - Validation Accuracy {}".format(
 				f"{epoch}".rjust(5),
@@ -146,17 +264,21 @@ class MultiLayerPerceptron():
 				f"{np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam):.3f}"
 			))
 
-	def predict(self, X: pd.DataFrame):
-		for idx, layer in enumerate(self.layers):
-			layer.forward_propagation(X.T if idx == 0 else self.layers[idx - 1].forward_outputs)
-		predictions = np.argmax(self.layers[-1].forward_outputs, axis=0)
+	def predict(self, X: pd.DataFrame, layers: dl.DenseLayer|None=None):
+		if layers is None:
+			if self.early_stopping_best_layers is not None:
+				layers = self.early_stopping_best_layers
+			else:
+				layers = self.layers
+		layers = self.forward_propagation(X.T, layers)
+		predictions = np.argmax(layers[-1].forward_outputs, axis=0)
 		df = pd.Series(predictions, name=self.target, index=X.index).map(self.classes)
 		df.to_csv('datasets/predictions.csv')
 		return df
 	
 	def forward_propagation(self, X: pd.DataFrame, layers: dl.DenseLayer):
-		for idx, layer in enumerate(layers):
-			layer.forward_propagation(X.T if idx == 0 else layers[idx - 1].forward_outputs)
+		for idx, _ in enumerate(layers):
+			layers[idx].forward_propagation(X if idx == 0 else layers[idx - 1].forward_outputs)
 		return layers
 	
 	def backward_propagation(self, X: pd.DataFrame, Y: pd.Series, layers: dl.DenseLayer):
