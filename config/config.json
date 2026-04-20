@@ -19,9 +19,9 @@
 		]
 	},
 	"model": {
-		"dataset_train": "",
-		"dataset_valid": "",
+		"dataset_path": "datasets/data.csv",
 		"target": 0,
+		"validation_split": 0.2,
 		"learning_rate": 0.001,
 		"batch_size": 8,
 		"epochs": 100,
