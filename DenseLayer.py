@@ -63,8 +63,16 @@ class DenseLayer():
 		self.dZ = dZ
 
 	def update_parameters(self, learning_rate: float = 0.1):
+		# Clip gradients to prevent explosion
+		self.dW = np.clip(self.dW, -5, 5)
+		self.db = np.clip(self.db, -5, 5)
+		
 		self.weights -= learning_rate * self.dW
 		self.biases -= learning_rate * self.db
+		
+		# Clip weights to prevent divergence
+		self.weights = np.clip(self.weights, -10, 10)
+		self.biases = np.clip(self.biases, -10, 10)
 
 	def update_parameters_adam(self, learning_rate: float = 0.1):
 		self.t += 1
@@ -80,3 +88,7 @@ class DenseLayer():
 
 		self.weights -= learning_rate * mW_hat / (np.sqrt(vW_hat) + self.epsilon)
 		self.biases -= learning_rate * mb_hat / (np.sqrt(vb_hat) + self.epsilon)
+		
+		# Clip weights to prevent divergence
+		self.weights = np.clip(self.weights, -10, 10)
+		self.biases = np.clip(self.biases, -10, 10)

@@ -2,12 +2,17 @@
 	"network": {
 		"layers": [
 			{
-				"n_neurons": 8,
+				"n_neurons": 16,
 				"activation_function": "ReLU",
 				"weights_initializer": "HeNormal"
 			},
 			{
-				"n_neurons": 8,
+				"n_neurons": 16,
+				"activation_function": "ReLU",
+				"weights_initializer": "HeNormal"
+			},
+			{
+				"n_neurons": 16,
 				"activation_function": "ReLU",
 				"weights_initializer": "HeNormal"
 			},

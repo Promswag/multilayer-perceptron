@@ -24,12 +24,16 @@ class MultiLayerPerceptron():
 		if isinstance(target, int):
 			target = data_train.columns[target]
 		features = data_train.columns.difference([target])
+		class_to_index = {v: k for k, v in self.classes.items()}
 
-		data_train.loc[:, target] = data_train.loc[:, target].map({v: k for k, v in self.classes.items()}).astype(int)
+		data_train = data_train.copy()
+		data_valid = data_valid.copy()
+
+		data_train[target] = data_train[target].map(class_to_index).astype(int)
 		self.X_train = data_train.loc[:, features]
 		self.Y_train = data_train.loc[:, target].astype(int)
 
-		data_valid.loc[:, target] = data_valid.loc[:, target].map({v: k for k, v in self.classes.items()}).astype(int)
+		data_valid[target] = data_valid[target].map(class_to_index).astype(int)
 		self.X_valid = data_valid.loc[:, features]
 		self.Y_valid = data_valid.loc[:, target].astype(int)
 
@@ -81,10 +85,11 @@ class MultiLayerPerceptron():
 		return True
 		
 	def animation(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
-		self.init_layers()
-		if batch_size == 0:
-			batch_size = len(self.X_train)
-		
+		"""Display animation using pre-trained metrics from train() method."""
+		if not hasattr(self, 'loss_train') or len(self.loss_train) == 0:
+			print("No training metrics found. Call train() before animation().")
+			return
+
 		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
 		fig.suptitle('Training Neural Network')
 		
@@ -93,22 +98,13 @@ class MultiLayerPerceptron():
 		ax2.set_xlabel('Epochs')
 		ax2.set_ylabel('Accuracy')
 
-		# ax1b = ax1.twiny()
-		# ax2b = ax2.twiny()
-		# ax1b.set_xticklabels([])
-		# ax1b.set_xticks([])
-		# ax2b.set_xticklabels([])
-		# ax2b.set_xticks([])
-
 		loss_train_line, = ax1.plot([], [], label='Training Loss', color='blue')
 		loss_valid_line, = ax1.plot([], [], label='Validation Loss', color='orange')
-		# loss_batch_line, = ax1b.plot([], [], label='Batch Loss', color='green', alpha=0.5, linewidth=0.1)
 		loss_train_adam_line, = ax1.plot([], [], label='Training Loss ADAM', color='red')
 		loss_valid_adam_line, = ax1.plot([], [], label='Validation Loss ADAM', color='purple')
 
 		accuracy_train_line, = ax2.plot([], [], label='Training Accuracy', color='blue')
 		accuracy_valid_line, = ax2.plot([], [], label='Validation Accuracy', color='orange')
-		# accuracy_batch_line, = ax2b.plot([], [], label='Batch Accuracy', color='green', alpha=0.5, linewidth=0.1)
 		accuracy_train_adam_line, = ax2.plot([], [], label='Training Accuracy ADAM', color='red')
 		accuracy_valid_adam_line, = ax2.plot([], [], label='Validation Accuracy ADAM', color='purple')
 
@@ -116,93 +112,29 @@ class MultiLayerPerceptron():
 		ax2.legend()
 		ax1.grid()
 		ax2.grid()
-		# ax1b.legend()
-		# ax2b.legend()
-
-		self.loss_train = []
-		self.loss_valid = []
-		# self.loss_batch = []
-		self.loss_train_adam = []
-		self.loss_valid_adam = []
-		self.accuracy_train = []
-		self.accuracy_valid = []
-		# self.accuracy_batch = []
-		self.accuracy_train_adam = []
-		self.accuracy_valid_adam = []
 
 		def frame_update(epoch):
-			indexes = np.random.permutation(self.X_train.index)
-			for i in range(0, len(self.X_train), batch_size):
-				indexes_batch = indexes[i:i + batch_size]
-				X_batch = self.X_train.loc[indexes_batch].T
-				Y_batch = self.Y_train.loc[indexes_batch]
-
-				self.layers = self.forward_propagation(X_batch, self.layers)
-				self.adam_layers = self.forward_propagation(X_batch, self.adam_layers)
-
-				# self.loss_batch.append(self.compute_cost(self.layers[-1].forward_outputs, Y_batch, len(Y_batch), loss))
-				# self.accuracy_batch.append(np.sum(np.argmax(self.layers[-1].forward_outputs, axis=0) == Y_batch)/len(Y_batch))
-
-				self.layers = self.backward_propagation(X_batch, Y_batch, self.layers)
-				self.adam_layers = self.backward_propagation(X_batch, Y_batch, self.adam_layers)
-
-				for layer in self.layers:
-					layer.update_parameters(learning_rate)
-				for layer in self.adam_layers:
-					layer.update_parameters_adam(learning_rate)
-
-
-			bgd = self.forward_propagation(self.X_train.T, self.layers)[-1].forward_outputs
-			cost_train = self.compute_cost(bgd, self.Y_train, len(self.Y_train), loss)
-			Y_train_pred = np.argmax(bgd, axis=0)
-			bgd_valid = self.forward_propagation(self.X_valid.T, self.layers)[-1].forward_outputs
-			cost_valid = self.compute_cost(bgd_valid, self.Y_valid, len(self.Y_valid), loss)
-			Y_val_pred = np.argmax(bgd_valid, axis=0)
-
-			adam = self.forward_propagation(self.X_train.T, self.adam_layers)[-1].forward_outputs
-			cost_train_adam = self.compute_cost(adam, self.Y_train, len(self.Y_train), loss)
-			Y_train_pred_adam = np.argmax(adam, axis=0)
-			adam_valid = self.forward_propagation(self.X_valid.T, self.adam_layers)[-1].forward_outputs
-			cost_valid_adam = self.compute_cost(adam_valid, self.Y_valid, len(self.Y_valid), loss)
-			Y_val_pred_adam = np.argmax(adam_valid, axis=0)
-
-			if self.early_stopping_patience is not None:
-				if not self.early_stopping_handler(self.Y_valid, self.adam_layers, loss):
-					anim.event_source.stop()
-					return
-				
-			self.loss_train.append(cost_train)
-			self.loss_valid.append(cost_valid)
-			self.loss_train_adam.append(cost_train_adam)
-			self.loss_valid_adam.append(cost_valid_adam)
-
-			self.accuracy_train.append(np.sum(Y_train_pred == self.Y_train)/len(Y_train_pred))
-			self.accuracy_valid.append(np.sum(Y_val_pred == self.Y_valid)/len(Y_val_pred))
-			self.accuracy_train_adam.append(np.sum(Y_train_pred_adam == self.Y_train)/len(Y_train_pred_adam))
-			self.accuracy_valid_adam.append(np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam))
-
-			loss_train_line.set_data(range(0, len(self.loss_train)), self.loss_train)
-			loss_valid_line.set_data(range(0, len(self.loss_valid)), self.loss_valid)
-			# loss_batch_line.set_data(range(0, len(self.loss_batch)), self.loss_batch)
-			loss_train_adam_line.set_data(range(0, len(self.loss_train_adam)), self.loss_train_adam)
-			loss_valid_adam_line.set_data(range(0, len(self.loss_valid_adam)), self.loss_valid_adam)
-			accuracy_train_line.set_data(range(0, len(self.accuracy_train)), self.accuracy_train)
-			accuracy_valid_line.set_data(range(0, len(self.accuracy_valid)), self.accuracy_valid)
-			# accuracy_batch_line.set_data(range(0, len(self.accuracy_batch)), self.accuracy_batch)
-			accuracy_train_adam_line.set_data(range(0, len(self.accuracy_train_adam)), self.accuracy_train_adam)
-			accuracy_valid_adam_line.set_data(range(0, len(self.accuracy_valid_adam)), self.accuracy_valid_adam)
+			loss_train_line.set_data(range(0, len(self.loss_train[:epoch+1])), self.loss_train[:epoch+1])
+			loss_valid_line.set_data(range(0, len(self.loss_valid[:epoch+1])), self.loss_valid[:epoch+1])
+			loss_train_adam_line.set_data(range(0, len(self.loss_train_adam[:epoch+1])), self.loss_train_adam[:epoch+1])
+			loss_valid_adam_line.set_data(range(0, len(self.loss_valid_adam[:epoch+1])), self.loss_valid_adam[:epoch+1])
+			
+			accuracy_train_line.set_data(range(0, len(self.accuracy_train[:epoch+1])), self.accuracy_train[:epoch+1])
+			accuracy_valid_line.set_data(range(0, len(self.accuracy_valid[:epoch+1])), self.accuracy_valid[:epoch+1])
+			accuracy_train_adam_line.set_data(range(0, len(self.accuracy_train_adam[:epoch+1])), self.accuracy_train_adam[:epoch+1])
+			accuracy_valid_adam_line.set_data(range(0, len(self.accuracy_valid_adam[:epoch+1])), self.accuracy_valid_adam[:epoch+1])
 
 			ax1.set_xlim(0, len(self.loss_train))
 			ax2.set_xlim(0, len(self.accuracy_train))
-			# ax1b.set_xlim(0, len(self.loss_batch))
-			# ax2b.set_xlim(0, len(self.accuracy_batch))
-
-			ax1.set_ylim(0, max(max(self.loss_train), max(self.loss_valid), max(self.loss_train_adam), max(self.loss_valid_adam)))
-			ax2.set_ylim(min(min(self.accuracy_train), min(self.accuracy_valid), min(self.accuracy_train_adam), min(self.accuracy_valid_adam)), 1)
+			
+			if self.loss_train:
+				ax1.set_ylim(0, max(max(self.loss_train), max(self.loss_valid), max(self.loss_train_adam), max(self.loss_valid_adam)))
+			if self.accuracy_train:
+				ax2.set_ylim(min(min(self.accuracy_train), min(self.accuracy_valid), min(self.accuracy_train_adam), min(self.accuracy_valid_adam)), 1)
 
 			return loss_train_line, loss_valid_line, loss_train_adam_line, loss_valid_adam_line, accuracy_train_line, accuracy_valid_line, accuracy_train_adam_line, accuracy_valid_adam_line
 
-		anim = animation.FuncAnimation(fig, frame_update, frames=epochs, interval=1, repeat=False, blit=False)
+		anim = animation.FuncAnimation(fig, frame_update, frames=len(self.loss_train), interval=1, repeat=False, blit=False)
 		plt.show(block=True)
 		return
 
@@ -210,6 +142,16 @@ class MultiLayerPerceptron():
 		self.init_layers()
 		if batch_size == 0:
 			batch_size = len(self.X_train)
+
+		# Initialize metric storage
+		self.loss_train = []
+		self.loss_valid = []
+		self.loss_train_adam = []
+		self.loss_valid_adam = []
+		self.accuracy_train = []
+		self.accuracy_valid = []
+		self.accuracy_train_adam = []
+		self.accuracy_valid_adam = []
 
 		for epoch in range(epochs):
 			indexes = np.random.permutation(self.X_train.index)
@@ -244,6 +186,16 @@ class MultiLayerPerceptron():
 			adam_valid = self.forward_propagation(self.X_valid.T, self.adam_layers)[-1].forward_outputs
 			cost_valid_adam = self.compute_cost(adam_valid, self.Y_valid, len(self.Y_valid), loss)
 			Y_val_pred_adam = np.argmax(adam_valid, axis=0)
+
+			# Store metrics
+			self.loss_train.append(cost_train)
+			self.loss_valid.append(cost_valid)
+			self.loss_train_adam.append(cost_train_adam)
+			self.loss_valid_adam.append(cost_valid_adam)
+			self.accuracy_train.append(np.sum(Y_train_pred == self.Y_train)/len(Y_train_pred))
+			self.accuracy_valid.append(np.sum(Y_val_pred == self.Y_valid)/len(Y_val_pred))
+			self.accuracy_train_adam.append(np.sum(Y_train_pred_adam == self.Y_train)/len(Y_train_pred_adam))
+			self.accuracy_valid_adam.append(np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam))
 
 			if self.early_stopping_patience is not None:
 				if not self.early_stopping_handler(self.Y_valid, self.adam_layers, loss):

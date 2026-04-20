@@ -174,12 +174,13 @@ def compare(config):
 			s2 = df_b[target_name]
 			target_label = target_name
 
-		comp = pd.concat([s1.rename("a"), s2.rename("b")], axis=1, join="outer")
+		comp = pd.concat(
+			[s1.rename("a").astype(str), s2.rename("b").astype(str)],
+			axis=1,
+			join="outer"
+		)
 		idx_only_a = s1.index.difference(s2.index)
 		idx_only_b = s2.index.difference(s1.index)
-
-		comp.loc[:, "a"] = comp.loc[:, "a"].astype(str)
-		comp.loc[:, "b"] = comp.loc[:, "b"].astype(str)
 		matches = comp.loc[:, "a"] == comp.loc[:, "b"]
 
 		n_matches = int(matches.sum())
@@ -230,7 +231,6 @@ def main():
 
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
-		raise e
 
 if __name__ == "__main__":
 	main()
