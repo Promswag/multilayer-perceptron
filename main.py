@@ -146,11 +146,14 @@ def train_model(train, valid, config):
 				activation_function=layer["activation_function"],
 				weights_initializer=layer["weights_initializer"])
 
+		optimizers = config["model"].get("optimizers", config["model"].get("optimizer", "gradient_descent"))
+
 		model.train(
 			epochs=config["model"]["epochs"],
 			learning_rate=config["model"]["learning_rate"],
 			batch_size=config["model"]["batch_size"],
-			loss=config["model"]["loss"]
+			loss=config["model"]["loss"],
+			optimizers=optimizers
 		)
 
 		model.animation(

@@ -21,6 +21,8 @@ class MultiLayerPerceptron():
 		self.early_stopping_counter = 0
 		self.early_stopping_best = np.inf
 		self.early_stopping_best_layers = None
+		self.best_optimizer = None
+		self.optimizers = []
 
 	def init_datasets(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str):
 		if isinstance(target, int):
@@ -45,7 +47,39 @@ class MultiLayerPerceptron():
 	def init_layers(self):
 		for layer in self.layers:
 			layer.init_weights()
-		self.adam_layers = copy.deepcopy(self.layers)
+
+	def _resolve_optimizers(self, optimizers):
+		if optimizers is None:
+			optimizers = ["gradient_descent"]
+		elif isinstance(optimizers, str):
+			optimizers = [optimizers]
+
+		aliases = {
+			"gd": "gradient_descent",
+			"sgd": "gradient_descent",
+			"gradient_descent": "gradient_descent",
+			"adam": "adam",
+		}
+
+		resolved = []
+		for optimizer in optimizers:
+			key = str(optimizer).strip().lower().replace("-", "_")
+			if key not in aliases:
+				raise ValueError(f"Optimizer {optimizer} not supported")
+			name = aliases[key]
+			if name not in resolved:
+				resolved.append(name)
+
+		if len(resolved) == 0:
+			resolved = ["gradient_descent"]
+		return resolved
+
+	def _apply_optimizer_step(self, layers, optimizer_name, learning_rate):
+		for layer in layers:
+			if optimizer_name == "adam":
+				layer.update_parameters_adam(learning_rate)
+			else:
+				layer.update_parameters(learning_rate)
 
 	def add_layer(self, n_neurons: int, activation_function: str, weights_initializer: str):
 		self.layers.append(
@@ -100,15 +134,24 @@ class MultiLayerPerceptron():
 		ax2.set_xlabel('Epochs')
 		ax2.set_ylabel('Accuracy')
 
-		loss_train_line, = ax1.plot([], [], label='Training Loss', color='blue')
-		loss_valid_line, = ax1.plot([], [], label='Validation Loss', color='orange')
-		loss_train_adam_line, = ax1.plot([], [], label='Training Loss ADAM', color='red')
-		loss_valid_adam_line, = ax1.plot([], [], label='Validation Loss ADAM', color='purple')
+		optimizer_labels = {
+			"gradient_descent": "GD",
+			"adam": "ADAM",
+		}
+		train_colors = ['blue', 'red', 'green', 'brown', 'black']
+		valid_colors = ['orange', 'purple', 'cyan', 'magenta', 'gray']
 
-		accuracy_train_line, = ax2.plot([], [], label='Training Accuracy', color='blue')
-		accuracy_valid_line, = ax2.plot([], [], label='Validation Accuracy', color='orange')
-		accuracy_train_adam_line, = ax2.plot([], [], label='Training Accuracy ADAM', color='red')
-		accuracy_valid_adam_line, = ax2.plot([], [], label='Validation Accuracy ADAM', color='purple')
+		loss_train_lines = {}
+		loss_valid_lines = {}
+		accuracy_train_lines = {}
+		accuracy_valid_lines = {}
+
+		for idx, optimizer in enumerate(self.optimizers):
+			label = optimizer_labels.get(optimizer, optimizer.upper())
+			loss_train_lines[optimizer], = ax1.plot([], [], label=f'Training Loss {label}', color=train_colors[idx % len(train_colors)])
+			loss_valid_lines[optimizer], = ax1.plot([], [], label=f'Validation Loss {label}', color=valid_colors[idx % len(valid_colors)])
+			accuracy_train_lines[optimizer], = ax2.plot([], [], label=f'Training Accuracy {label}', color=train_colors[idx % len(train_colors)])
+			accuracy_valid_lines[optimizer], = ax2.plot([], [], label=f'Validation Accuracy {label}', color=valid_colors[idx % len(valid_colors)])
 
 		ax1.legend()
 		ax2.legend()
@@ -116,31 +159,47 @@ class MultiLayerPerceptron():
 		ax2.grid()
 
 		def frame_update(epoch):
-			loss_train_line.set_data(range(0, len(self.loss_train[:epoch+1])), self.loss_train[:epoch+1])
-			loss_valid_line.set_data(range(0, len(self.loss_valid[:epoch+1])), self.loss_valid[:epoch+1])
-			loss_train_adam_line.set_data(range(0, len(self.loss_train_adam[:epoch+1])), self.loss_train_adam[:epoch+1])
-			loss_valid_adam_line.set_data(range(0, len(self.loss_valid_adam[:epoch+1])), self.loss_valid_adam[:epoch+1])
-			
-			accuracy_train_line.set_data(range(0, len(self.accuracy_train[:epoch+1])), self.accuracy_train[:epoch+1])
-			accuracy_valid_line.set_data(range(0, len(self.accuracy_valid[:epoch+1])), self.accuracy_valid[:epoch+1])
-			accuracy_train_adam_line.set_data(range(0, len(self.accuracy_train_adam[:epoch+1])), self.accuracy_train_adam[:epoch+1])
-			accuracy_valid_adam_line.set_data(range(0, len(self.accuracy_valid_adam[:epoch+1])), self.accuracy_valid_adam[:epoch+1])
+			all_loss_values = []
+			all_accuracy_values = []
 
-			ax1.set_xlim(0, len(self.loss_train))
-			ax2.set_xlim(0, len(self.accuracy_train))
-			
-			if self.loss_train:
-				ax1.set_ylim(0, max(max(self.loss_train), max(self.loss_valid), max(self.loss_train_adam), max(self.loss_valid_adam)))
-			if self.accuracy_train:
-				ax2.set_ylim(min(min(self.accuracy_train), min(self.accuracy_valid), min(self.accuracy_train_adam), min(self.accuracy_valid_adam)), 1)
+			for optimizer in self.optimizers:
+				train_loss_values = self.loss_train[optimizer][:epoch + 1]
+				valid_loss_values = self.loss_valid[optimizer][:epoch + 1]
+				train_acc_values = self.accuracy_train[optimizer][:epoch + 1]
+				valid_acc_values = self.accuracy_valid[optimizer][:epoch + 1]
 
-			return loss_train_line, loss_valid_line, loss_train_adam_line, loss_valid_adam_line, accuracy_train_line, accuracy_valid_line, accuracy_train_adam_line, accuracy_valid_adam_line
+				loss_train_lines[optimizer].set_data(range(0, len(train_loss_values)), train_loss_values)
+				loss_valid_lines[optimizer].set_data(range(0, len(valid_loss_values)), valid_loss_values)
+				accuracy_train_lines[optimizer].set_data(range(0, len(train_acc_values)), train_acc_values)
+				accuracy_valid_lines[optimizer].set_data(range(0, len(valid_acc_values)), valid_acc_values)
 
-		anim = animation.FuncAnimation(fig, frame_update, frames=len(self.loss_train), interval=1, repeat=False, blit=False)
+				all_loss_values.extend(train_loss_values)
+				all_loss_values.extend(valid_loss_values)
+				all_accuracy_values.extend(train_acc_values)
+				all_accuracy_values.extend(valid_acc_values)
+
+			max_epoch = max(len(self.loss_train[optimizer]) for optimizer in self.optimizers)
+			ax1.set_xlim(0, max_epoch)
+			ax2.set_xlim(0, max_epoch)
+
+			if all_loss_values:
+				ax1.set_ylim(0, max(all_loss_values))
+			if all_accuracy_values:
+				ax2.set_ylim(min(all_accuracy_values), 1)
+
+			return [
+				*loss_train_lines.values(),
+				*loss_valid_lines.values(),
+				*accuracy_train_lines.values(),
+				*accuracy_valid_lines.values(),
+			]
+
+		max_epoch = max(len(self.loss_train[optimizer]) for optimizer in self.optimizers)
+		anim = animation.FuncAnimation(fig, frame_update, frames=max_epoch, interval=1, repeat=False, blit=False)
 
 		# Save the final training curves snapshot in the graphs directory.
 		os.makedirs('graphs', exist_ok=True)
-		frame_update(len(self.loss_train) - 1)
+		frame_update(max_epoch - 1)
 		timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 		graph_path = os.path.join('graphs', f'training_curves_{timestamp}.png')
 		fig.savefig(graph_path, dpi=150, bbox_inches='tight')
@@ -149,20 +208,29 @@ class MultiLayerPerceptron():
 		plt.show(block=True)
 		return
 
-	def train(self, epochs: int, learning_rate: float, batch_size: int, loss: str):
+	def train(self, epochs: int, learning_rate: float, batch_size: int, loss: str, optimizers=None):
 		self.init_layers()
+		self.optimizers = self._resolve_optimizers(optimizers)
+		self.optimizer_layers = {optimizer: copy.deepcopy(self.layers) for optimizer in self.optimizers}
 		if batch_size == 0:
 			batch_size = len(self.X_train)
 
 		# Initialize metric storage
-		self.loss_train = []
-		self.loss_valid = []
-		self.loss_train_adam = []
-		self.loss_valid_adam = []
-		self.accuracy_train = []
-		self.accuracy_valid = []
-		self.accuracy_train_adam = []
-		self.accuracy_valid_adam = []
+		self.loss_train = {optimizer: [] for optimizer in self.optimizers}
+		self.loss_valid = {optimizer: [] for optimizer in self.optimizers}
+		self.accuracy_train = {optimizer: [] for optimizer in self.optimizers}
+		self.accuracy_valid = {optimizer: [] for optimizer in self.optimizers}
+
+		early_stopping_state = {
+			optimizer: {
+				"best": np.inf,
+				"counter": 0,
+				"best_layers": copy.deepcopy(self.optimizer_layers[optimizer]),
+			}
+			for optimizer in self.optimizers
+		}
+		global_best_cost = np.inf
+		global_best_optimizer = self.optimizers[0]
 
 		for epoch in range(epochs):
 			indexes = np.random.permutation(self.X_train.index)
@@ -172,60 +240,66 @@ class MultiLayerPerceptron():
 				X_batch = self.X_train.loc[indexes_batch].T
 				Y_batch = self.Y_train.loc[indexes_batch]
 
-				self.layers = self.forward_propagation(X_batch, self.layers)
-				self.adam_layers = self.forward_propagation(X_batch, self.adam_layers)
+				for optimizer in self.optimizers:
+					layers = self.optimizer_layers[optimizer]
+					layers = self.forward_propagation(X_batch, layers)
+					layers = self.backward_propagation(X_batch, Y_batch, layers)
+					self._apply_optimizer_step(layers, optimizer, learning_rate)
+					self.optimizer_layers[optimizer] = layers
 
-				self.layers = self.backward_propagation(X_batch, Y_batch, self.layers)
-				self.adam_layers = self.backward_propagation(X_batch, Y_batch, self.adam_layers)
+			epoch_valid_costs = {}
+			for optimizer in self.optimizers:
+				layers = self.optimizer_layers[optimizer]
+				train_output = self.forward_propagation(self.X_train.T, layers)[-1].forward_outputs
+				valid_output = self.forward_propagation(self.X_valid.T, layers)[-1].forward_outputs
 
-				for layer in self.layers:
-					layer.update_parameters(learning_rate)
-				for layer in self.adam_layers:
-					layer.update_parameters_adam(learning_rate)
+				cost_train = self.compute_cost(train_output, self.Y_train, len(self.Y_train), loss)
+				cost_valid = self.compute_cost(valid_output, self.Y_valid, len(self.Y_valid), loss)
+				train_pred = np.argmax(train_output, axis=0)
+				valid_pred = np.argmax(valid_output, axis=0)
+				train_acc = np.sum(train_pred == self.Y_train) / len(train_pred)
+				valid_acc = np.sum(valid_pred == self.Y_valid) / len(valid_pred)
 
+				self.loss_train[optimizer].append(cost_train)
+				self.loss_valid[optimizer].append(cost_valid)
+				self.accuracy_train[optimizer].append(train_acc)
+				self.accuracy_valid[optimizer].append(valid_acc)
+				epoch_valid_costs[optimizer] = cost_valid
 
-			bgd = self.forward_propagation(self.X_train.T, self.layers)[-1].forward_outputs
-			cost_train = self.compute_cost(bgd, self.Y_train, len(self.Y_train), loss)
-			Y_train_pred = np.argmax(bgd, axis=0)
-			bgd_valid = self.forward_propagation(self.X_valid.T, self.layers)[-1].forward_outputs
-			cost_valid = self.compute_cost(bgd_valid, self.Y_valid, len(self.Y_valid), loss)
-			Y_val_pred = np.argmax(bgd_valid, axis=0)
+				if cost_valid < early_stopping_state[optimizer]["best"]:
+					early_stopping_state[optimizer]["best"] = cost_valid
+					early_stopping_state[optimizer]["counter"] = 0
+					early_stopping_state[optimizer]["best_layers"] = copy.deepcopy(layers)
+				else:
+					early_stopping_state[optimizer]["counter"] += 1
 
-			adam = self.forward_propagation(self.X_train.T, self.adam_layers)[-1].forward_outputs
-			cost_train_adam = self.compute_cost(adam, self.Y_train, len(self.Y_train), loss)
-			Y_train_pred_adam = np.argmax(adam, axis=0)
-			adam_valid = self.forward_propagation(self.X_valid.T, self.adam_layers)[-1].forward_outputs
-			cost_valid_adam = self.compute_cost(adam_valid, self.Y_valid, len(self.Y_valid), loss)
-			Y_val_pred_adam = np.argmax(adam_valid, axis=0)
+				if early_stopping_state[optimizer]["best"] < global_best_cost:
+					global_best_cost = early_stopping_state[optimizer]["best"]
+					global_best_optimizer = optimizer
 
-			# Store metrics
-			self.loss_train.append(cost_train)
-			self.loss_valid.append(cost_valid)
-			self.loss_train_adam.append(cost_train_adam)
-			self.loss_valid_adam.append(cost_valid_adam)
-			self.accuracy_train.append(np.sum(Y_train_pred == self.Y_train)/len(Y_train_pred))
-			self.accuracy_valid.append(np.sum(Y_val_pred == self.Y_valid)/len(Y_val_pred))
-			self.accuracy_train_adam.append(np.sum(Y_train_pred_adam == self.Y_train)/len(Y_train_pred_adam))
-			self.accuracy_valid_adam.append(np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam))
+				print(
+					"Epoch {} [{}] - Training Cost {} - Validation Cost {} - Training Accuracy {} - Validation Accuracy {}".format(
+						f"{epoch}".rjust(5),
+						optimizer.upper(),
+						f"{cost_train:.5f}".rjust(5),
+						f"{cost_valid:.5f}".rjust(5),
+						f"{train_acc:.3f}",
+						f"{valid_acc:.3f}"
+					)
+				)
 
 			if self.early_stopping_patience is not None:
-				if not self.early_stopping_handler(self.Y_valid, self.adam_layers, loss):
+				current_best_optimizer = min(epoch_valid_costs, key=epoch_valid_costs.get)
+				if early_stopping_state[current_best_optimizer]["counter"] >= self.early_stopping_patience:
+					print(
+						f"Early stopping triggered by {current_best_optimizer.upper()} at epoch {epoch} "
+						f"(patience={self.early_stopping_patience})."
+					)
 					break
 
-			print("Epoch {} - Training Cost {} - Validation Cost {} - Training Accuracy {} - Validation Accuracy {}".format(
-				f"{epoch}".rjust(5),
-				f"{cost_train:.5f}".rjust(5),
-				f"{cost_valid:.5f}".rjust(5),
-				f"{np.sum(Y_train_pred == self.Y_train)/len(Y_train_pred):.3f}",
-				f"{np.sum(Y_val_pred == self.Y_valid)/len(Y_val_pred):.3f}"
-			))
-			print("Adamh {} - Training ADAM {} - Validation ADAM {} - Training ADAMracy {} - Validation ADAMracy {}".format(
-				f"{epoch}".rjust(5),
-				f"{cost_train_adam:.5f}".rjust(5),
-				f"{cost_valid_adam:.5f}".rjust(5),
-				f"{np.sum(Y_train_pred_adam == self.Y_train)/len(Y_train_pred_adam):.3f}",
-				f"{np.sum(Y_val_pred_adam == self.Y_valid)/len(Y_val_pred_adam):.3f}"
-			))
+		self.best_optimizer = global_best_optimizer
+		self.early_stopping_best_layers = copy.deepcopy(early_stopping_state[global_best_optimizer]["best_layers"])
+		self.layers = self.early_stopping_best_layers
 
 	def predict(self, X: pd.DataFrame, layers: dl.DenseLayer|None=None):
 		if layers is None:
