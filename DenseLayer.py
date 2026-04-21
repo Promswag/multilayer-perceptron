@@ -4,8 +4,21 @@ import weights_initializer as wi
 
 AF = {
 	'ReLU': [af.relu, af.relu_derivative],
+	'LeakyReLU': [af.leaky_relu, af.leaky_relu_derivative],
+	'GELU': [af.gelu, af.gelu_derivative],
+	'SiLU': [af.silu, af.silu_derivative],
 	'sigmoid': [af.sigmoid, af.sigmoid_derivative],
 	'softmax': [af.softmax, None]
+}
+AF_ALIASES = {
+	'relu': 'ReLU',
+	'leakyrelu': 'LeakyReLU',
+	'leaky_relu': 'LeakyReLU',
+	'gelu': 'GELU',
+	'silu': 'SiLU',
+	'swish': 'SiLU',
+	'sigmoid': 'sigmoid',
+	'softmax': 'softmax',
 }
 WI = {
 	'HeNormal': wi.he_normal,
@@ -20,8 +33,12 @@ class DenseLayer():
 	def __init__(self, n_inputs: int, n_neurons: int, activation_function: str, weights_initializer: str):
 		self.n_inputs = n_inputs
 		self.n_neurons = n_neurons
-		self.activation_function = AF[activation_function][0]
-		self.derivative_function = AF[activation_function][1]
+		activation_key = AF_ALIASES.get(str(activation_function).strip(), AF_ALIASES.get(str(activation_function).strip().lower()))
+		if activation_key is None:
+			raise ValueError(f"Activation function {activation_function} not supported")
+
+		self.activation_function = AF[activation_key][0]
+		self.derivative_function = AF[activation_key][1]
 		self.weights_initializer = WI[weights_initializer]
 
 		#Adam optimizer

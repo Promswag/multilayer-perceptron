@@ -1,6 +1,5 @@
 import pandas as pd
 
-# Set these values before running the script.
 INPUT_CSV = "datasets/digits_valid.csv"
 OUTPUT_CSV = "datasets/digits_valid_compact.csv"
 TARGET_COLUMN = "target"

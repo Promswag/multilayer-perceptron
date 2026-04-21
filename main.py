@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from train_test_split import train_test_split
 from sklearn.datasets import load_digits
 import StandardScaler
@@ -6,8 +7,10 @@ import MLP
 import json
 import sys
 import os
+import pickle
 
 PROJECT_NAME = "Multilayer Perceptron"
+DEFAULT_MODEL_PATH = os.path.join("models", "mlp_model.pkl")
 
 
 def print_header(config_loaded: bool, model_ready: bool):
@@ -26,7 +29,7 @@ def print_menu():
 		"[2] Split dataset\n"
 		"[3] Train model\n"
 		"[4] Predict\n"
-		"[5] Compare predictions\n"
+		"[5] Evaluate predictions\n"
 		"[q] Quit"
 	)
 
@@ -57,10 +60,40 @@ def load_dataset(dataset_path):
 		return None
 
 
+def save_artifacts(model, scaler, path: str = DEFAULT_MODEL_PATH):
+	try:
+		directory = os.path.dirname(path)
+		if directory:
+			os.makedirs(directory, exist_ok=True)
+		with open(path, 'wb') as file:
+			pickle.dump({'model': model, 'scaler': scaler}, file)
+		print(f"Model artifacts saved to {path}")
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+
+
+def load_artifacts(path: str = DEFAULT_MODEL_PATH):
+	try:
+		if not os.path.exists(path):
+			raise FileNotFoundError(f"Model artifact file '{path}' does not exist.")
+		with open(path, 'rb') as file:
+			artifacts = pickle.load(file)
+		model = artifacts.get('model')
+		scaler = artifacts.get('scaler')
+		if model is None or scaler is None:
+			raise ValueError("Invalid artifact file: missing model or scaler")
+		print(f"Model artifacts loaded from {path}")
+		return model, scaler
+	except Exception as e:
+		print(f"{type(e).__name__}: {e}")
+		return None, None
+
+
 def split_dataset(config):
 	dataset_path = config["model"]["dataset_path"] if "dataset_path" in config["model"] else input("Enter the path to the dataset: ").strip()
 	target = config["model"]["target"] if "target" in config["model"] else input("Enter the target label or index: ").strip()
 	validation_split = config["model"]["validation_split"] if "validation_split" in config["model"] else input("Enter the validation split: ").strip()
+	seed = config["model"].get("seed", None)
 
 	try:
 		validation_split = float(validation_split)
@@ -74,7 +107,7 @@ def split_dataset(config):
 		except:
 			pass
 
-		train, valid = train_test_split(df, target, float(validation_split))
+		train, valid = train_test_split(df, target, float(validation_split), seed)
 		train.to_csv(dataset_path[:-4] + '_train.csv')
 		print(f"Training data with shape {train.shape} saved as {dataset_path[:-4]}_train.csv ")
 		valid.to_csv(dataset_path[:-4] + '_valid.csv')
@@ -120,26 +153,38 @@ def train_model(train, valid, config):
 			batch_size=config["model"]["batch_size"],
 			loss=config["model"]["loss"]
 		)
+
+		model_path = config["model"].get("saved_model_path", DEFAULT_MODEL_PATH)
+		save_artifacts(model, scaler, model_path)
 		return model, scaler
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		raise e
 		return None, None
 
-def predict(model, scaler):
+def predict(model, scaler, config=None):
 	try:
 		if model is None or scaler is None:
-			raise ValueError("Please train the model first.")
+			default_model_path = DEFAULT_MODEL_PATH
+			if config is not None:
+				default_model_path = config["model"].get("saved_model_path", DEFAULT_MODEL_PATH)
+			model_path = input(f"Enter path to model artifacts [{default_model_path}]: ").strip()
+			model_path = model_path if model_path else default_model_path
+			model, scaler = load_artifacts(model_path)
+			if model is None or scaler is None:
+				raise ValueError("Please train the model first or provide a valid saved model file.")
 		dataset_path = input("Enter the path to the dataset: ").strip()
 		df = load_dataset(dataset_path)
+		if df is None:
+			raise ValueError("Could not load dataset for prediction.")
 		features = model.features
 		df[features] = scaler.transform(df[features])
-		model.predict(df[features])
+		return model.predict(df[features])
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		return
 	
-def compare(config):
+def evaluate(config):
 	try:
 		if config is None:
 			raise ValueError("Please load the config file first.")
@@ -199,6 +244,54 @@ def compare(config):
 			mismatch_idx = matches[matches == False].index.tolist()[:10]
 			print(f"First mismatch indices (up to 10): {mismatch_idx}")
 
+		loss_name = config.get("model", {}).get("loss")
+		if loss_name not in ["binary_crossentropy", "categorical_crossentropy"]:
+			print(f"Info: unsupported loss '{loss_name}' for probabilistic evaluation.")
+			return
+
+		compute_prob_loss = input("Compute probabilistic loss with model forward pass? [Y/n]: ").strip().lower()
+		if compute_prob_loss in ["", "y", "yes"]:
+			default_model_path = config["model"].get("saved_model_path", DEFAULT_MODEL_PATH)
+			model_path = input(f"Enter path to model artifacts [{default_model_path}]: ").strip()
+			model_path = model_path if model_path else default_model_path
+			model, scaler = load_artifacts(model_path)
+			if model is None or scaler is None:
+				print("Info: probabilistic loss skipped (model artifacts not loaded).")
+				return
+
+			eval_dataset_path = input("Enter path to dataset with features used for prediction: ").strip()
+			eval_df = load_dataset(eval_dataset_path)
+			if eval_df is None:
+				raise ValueError("Could not load evaluation feature dataset.")
+
+			missing_features = [f for f in model.features if f not in eval_df.columns]
+			if len(missing_features) > 0:
+				raise ValueError(f"Evaluation dataset is missing features required by the model: {missing_features}")
+
+			# Align on common index between provided truth labels and feature dataset.
+			common_idx = eval_df.index.intersection(s2.index)
+			if len(common_idx) == 0:
+				raise ValueError("No shared index between truth CSV and evaluation feature dataset.")
+
+			eval_features = eval_df.loc[common_idx, model.features].copy()
+			eval_features.loc[:, model.features] = scaler.transform(eval_features.loc[:, model.features])
+			y_true_raw = s2.loc[common_idx].astype(str)
+
+			class_to_index = {str(v): k for k, v in model.classes.items()}
+			y_true_idx = y_true_raw.map(class_to_index)
+			if y_true_idx.isna().any():
+				missing_labels = sorted(y_true_raw.loc[y_true_idx.isna()].unique().tolist())
+				raise ValueError(f"Unknown labels for this model in truth CSV: {missing_labels}")
+
+			layers = model.early_stopping_best_layers if model.early_stopping_best_layers is not None else model.layers
+			y_pred = model.forward_propagation(eval_features.T, layers)[-1].forward_outputs
+			loss_value = model.compute_cost(y_pred, y_true_idx.astype(int), len(y_true_idx), loss_name)
+			y_pred_idx = np.argmax(y_pred, axis=0)
+			accuracy = np.mean(y_pred_idx == y_true_idx.astype(int).to_numpy())
+
+			print(f"Evaluation {loss_name} (probabilities): {loss_value:.6f}")
+			print(f"Evaluation accuracy (probabilities -> argmax): {accuracy:.4f} ({accuracy * 100:.2f}%)")
+
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		return
@@ -223,14 +316,15 @@ def main():
 			elif choice == '3':
 				model, scaler = train_model(train, valid, config)
 			elif choice == '4':
-				predict(model, scaler)
+				predict(model, scaler, config)
 			elif choice == '5':
-				compare(config)
+				evaluate(config)
 			elif choice in ['exit', 'quit', 'q']:
 				return
 
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
+		raise e
 
 if __name__ == "__main__":
 	main()

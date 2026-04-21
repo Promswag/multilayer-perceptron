@@ -5,6 +5,7 @@ class StandardScaler():
 		self.features = []
 		self.mean = {}
 		self.std = {}
+		self.zero_variance_features = []
 
 	def from_file(self, path: str = 'datasets/scaler.csv') -> "StandardScaler":
 		try:
@@ -18,17 +19,41 @@ class StandardScaler():
 
 	def fit(self, df: pd.DataFrame):
 		self.features = df.select_dtypes(include='number').columns.values
+		self.zero_variance_features = []
 		for f in self.features:
 			lst = df[f].dropna()
+			if len(lst) == 0:
+				self.mean[f] = 0.0
+				self.std[f] = 0.0
+				self.zero_variance_features.append(f)
+				continue
+
 			self.mean[f] = sum(lst) / len(lst)
-			self.std[f] = (sum(abs(lst - self.mean[f]) ** 2) / (len(lst) - 1)) ** 0.5
+			if len(lst) < 2:
+				self.std[f] = 0.0
+			else:
+				self.std[f] = (sum(abs(lst - self.mean[f]) ** 2) / (len(lst) - 1)) ** 0.5
+
+			if self.std[f] == 0 or pd.isna(self.std[f]):
+				self.std[f] = 0.0
+				self.zero_variance_features.append(f)
+
+		if len(self.zero_variance_features) > 0:
+			print(f"Warning: zero-variance features detected ({len(self.zero_variance_features)}): {list(self.zero_variance_features)}")
 
 	def transform(self, df: pd.DataFrame) -> pd.DataFrame:
 		if len(self.features) == 0:
 			return df
 		for f in self.features:
-			df.loc[:,f] = (df.loc[:,f] - self.mean[f]) / self.std[f]
-			df.loc[:,f] = df.loc[:,f].fillna(0)
+			std = self.std.get(f, 0)
+			if std == 0 or pd.isna(std):
+				# Keep zero-variance features neutral after scaling.
+				df.loc[:, f] = 0
+				continue
+
+			scaled = (df.loc[:, f] - self.mean[f]) / std
+			scaled = scaled.replace([float('inf'), float('-inf')], 0).fillna(0)
+			df.loc[:, f] = scaled
 		return df
 
 	def fit_transform(self, df: pd.DataFrame) -> pd.DataFrame:

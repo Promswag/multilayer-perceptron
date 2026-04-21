@@ -8,13 +8,13 @@
 			},
 			{
 				"n_neurons": 16,
-				"activation_function": "ReLU",
+				"activation_function": "GELU",
 				"weights_initializer": "HeUniform"
 			},
 			{
 				"n_neurons": 0,
 				"activation_function": "softmax",
-				"weights_initializer": "HeNormal"
+				"weights_initializer": "GlorotNormal"
 			}
 		]
 	},

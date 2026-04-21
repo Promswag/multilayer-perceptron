@@ -4,6 +4,8 @@ import DenseLayer as dl
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import copy
+import os
+from datetime import datetime
 
 class MultiLayerPerceptron():
 	def __init__(self, data_train: pd.DataFrame, data_valid: pd.DataFrame, target: int|str, early_stopping_patience: int=None):
@@ -135,6 +137,15 @@ class MultiLayerPerceptron():
 			return loss_train_line, loss_valid_line, loss_train_adam_line, loss_valid_adam_line, accuracy_train_line, accuracy_valid_line, accuracy_train_adam_line, accuracy_valid_adam_line
 
 		anim = animation.FuncAnimation(fig, frame_update, frames=len(self.loss_train), interval=1, repeat=False, blit=False)
+
+		# Save the final training curves snapshot in the graphs directory.
+		os.makedirs('graphs', exist_ok=True)
+		frame_update(len(self.loss_train) - 1)
+		timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+		graph_path = os.path.join('graphs', f'training_curves_{timestamp}.png')
+		fig.savefig(graph_path, dpi=150, bbox_inches='tight')
+		print(f"Training curves saved to {graph_path}")
+
 		plt.show(block=True)
 		return
 
