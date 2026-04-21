@@ -25,7 +25,10 @@
 		"learning_rate": 0.001,
 		"batch_size": 8,
 		"epochs": 100,
-		"optimizers": ["gradient_descent"],
-		"loss": "binary_crossentropy"
+		"optimizers": ["gradient_descent", "adam"],
+		"loss": "binary_crossentropy",
+		"metrics": ["accuracy"],
+		"seed": 69,
+		"early_stopping_patience": 10 
 	}
 }

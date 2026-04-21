@@ -41,6 +41,9 @@ def load_config():
 	try:
 		with open(config_path, 'r') as file:
 			config = json.load(file)
+		if "seed" in config["model"]:
+			np.random.seed(config["model"]["seed"])
+			print(f"Random seed set to {config['model']['seed']}")
 		return config
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
@@ -122,6 +125,9 @@ def train_model(train, valid, config):
 		if train is None or valid is None or config is None:
 			raise ValueError("Please split the dataset and load the config file first.")
 		
+		if "seed" in config["model"]:
+			np.random.seed(config["model"]["seed"])
+		
 		target = config["model"]["target"]
 		if isinstance(target, int):
 			target = train.columns[target]
@@ -179,7 +185,10 @@ def predict(model, scaler, config=None):
 			raise ValueError("Could not load dataset for prediction.")
 		features = model.features
 		df[features] = scaler.transform(df[features])
-		return model.predict(df[features])
+		predictions, probabilities = model.predict(df[features])
+		print("Predictions saved to datasets/predictions.csv")
+		print("Prediction probabilities saved to datasets/predictions_proba.csv")
+		return predictions, probabilities
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		return
@@ -249,44 +258,39 @@ def evaluate(config):
 			print(f"Info: unsupported loss '{loss_name}' for probabilistic evaluation.")
 			return
 
-		compute_prob_loss = input("Compute probabilistic loss with model forward pass? [Y/n]: ").strip().lower()
+		compute_prob_loss = input("Compute probabilistic loss from a probability CSV? [Y/n]: ").strip().lower()
 		if compute_prob_loss in ["", "y", "yes"]:
-			default_model_path = config["model"].get("saved_model_path", DEFAULT_MODEL_PATH)
-			model_path = input(f"Enter path to model artifacts [{default_model_path}]: ").strip()
-			model_path = model_path if model_path else default_model_path
-			model, scaler = load_artifacts(model_path)
-			if model is None or scaler is None:
-				print("Info: probabilistic loss skipped (model artifacts not loaded).")
-				return
+			default_proba_path = os.path.join("datasets", "predictions_proba.csv")
+			proba_path = input(f"Enter path to probability CSV [{default_proba_path}]: ").strip()
+			proba_path = proba_path if proba_path else default_proba_path
+			pred_proba = pd.read_csv(proba_path, index_col=0)
 
-			eval_dataset_path = input("Enter path to dataset with features used for prediction: ").strip()
-			eval_df = load_dataset(eval_dataset_path)
-			if eval_df is None:
-				raise ValueError("Could not load evaluation feature dataset.")
-
-			missing_features = [f for f in model.features if f not in eval_df.columns]
-			if len(missing_features) > 0:
-				raise ValueError(f"Evaluation dataset is missing features required by the model: {missing_features}")
-
-			# Align on common index between provided truth labels and feature dataset.
-			common_idx = eval_df.index.intersection(s2.index)
+			truth_series = s1
+			common_idx = pred_proba.index.intersection(truth_series.index)
 			if len(common_idx) == 0:
-				raise ValueError("No shared index between truth CSV and evaluation feature dataset.")
+				raise ValueError("No shared index between truth CSV and probability CSV.")
 
-			eval_features = eval_df.loc[common_idx, model.features].copy()
-			eval_features.loc[:, model.features] = scaler.transform(eval_features.loc[:, model.features])
-			y_true_raw = s2.loc[common_idx].astype(str)
-
-			class_to_index = {str(v): k for k, v in model.classes.items()}
+			pred_proba = pred_proba.loc[common_idx]
+			y_true_raw = truth_series.loc[common_idx].astype(str)
+			class_order = [str(col) for col in pred_proba.columns]
+			class_to_index = {label: idx for idx, label in enumerate(class_order)}
 			y_true_idx = y_true_raw.map(class_to_index)
 			if y_true_idx.isna().any():
 				missing_labels = sorted(y_true_raw.loc[y_true_idx.isna()].unique().tolist())
-				raise ValueError(f"Unknown labels for this model in truth CSV: {missing_labels}")
+				raise ValueError(f"Unknown labels for probability columns: {missing_labels}")
 
-			layers = model.early_stopping_best_layers if model.early_stopping_best_layers is not None else model.layers
-			y_pred = model.forward_propagation(eval_features.T, layers)[-1].forward_outputs
-			loss_value = model.compute_cost(y_pred, y_true_idx.astype(int), len(y_true_idx), loss_name)
-			y_pred_idx = np.argmax(y_pred, axis=0)
+			y_true_one_hot = np.zeros((len(common_idx), len(class_order)))
+			y_true_one_hot[np.arange(len(common_idx)), y_true_idx.astype(int).to_numpy()] = 1
+			y_pred = np.clip(pred_proba.to_numpy(), 1e-10, 1 - 1e-10)
+
+			if loss_name == "categorical_crossentropy":
+				loss_value = -np.mean(np.sum(y_true_one_hot * np.log(y_pred), axis=1))
+			elif loss_name == "binary_crossentropy":
+				loss_value = -np.mean(np.sum(y_true_one_hot * np.log(y_pred) + (1 - y_true_one_hot) * np.log(1 - y_pred), axis=1))
+			else:
+				raise ValueError(f"Loss function {loss_name} not supported")
+
+			y_pred_idx = np.argmax(y_pred, axis=1)
 			accuracy = np.mean(y_pred_idx == y_true_idx.astype(int).to_numpy())
 
 			print(f"Evaluation {loss_name} (probabilities): {loss_value:.6f}")

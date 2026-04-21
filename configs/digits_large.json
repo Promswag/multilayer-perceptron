@@ -33,11 +33,11 @@
 		"target": "target",
 		"validation_split": 0.2,
 		"learning_rate": 0.01,
-		"batch_size": 5,
+		"batch_size": 20,
 		"epochs": 100,
 		"loss": "categorical_crossentropy",
 		"metrics": ["accuracy"],
-		"seed": 42,
+		"seed": 1337,
 		"early_stopping_patience": 30
 	}
 }

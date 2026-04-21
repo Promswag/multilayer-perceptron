@@ -25,7 +25,7 @@
 		"learning_rate": 0.001,
 		"batch_size": 8,
 		"epochs": 100,
-		"optimizers": ["gradient_descent"],
-		"loss": "binary_crossentropy"
+		"loss": "binary_crossentropy",
+		"seed": 42
 	}
 }

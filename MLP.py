@@ -234,10 +234,17 @@ class MultiLayerPerceptron():
 			else:
 				layers = self.layers
 		layers = self.forward_propagation(X.T, layers)
-		predictions = np.argmax(layers[-1].forward_outputs, axis=0)
+		probabilities = pd.DataFrame(
+			layers[-1].forward_outputs.T,
+			index=X.index,
+			columns=[self.classes[i] for i in range(self.n_classes)]
+		)
+		predictions = np.argmax(probabilities.to_numpy(), axis=1)
 		df = pd.Series(predictions, name=self.target, index=X.index).map(self.classes)
+		os.makedirs('datasets', exist_ok=True)
 		df.to_csv('datasets/predictions.csv')
-		return df
+		probabilities.to_csv('datasets/predictions_proba.csv')
+		return df, probabilities
 	
 	def forward_propagation(self, X: pd.DataFrame, layers: dl.DenseLayer):
 		for idx, _ in enumerate(layers):

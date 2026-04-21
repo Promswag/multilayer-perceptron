@@ -3,4 +3,4 @@
 python3 -m venv venv
 source ./venv/bin/activate
 pip install -r requirements.txt
-mkdir -p datasets graphs
+mkdir -p datasets graphs models
