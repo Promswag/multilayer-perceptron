@@ -7,6 +7,7 @@ AF = {
 	'LeakyReLU': [af.leaky_relu, af.leaky_relu_derivative],
 	'GELU': [af.gelu, af.gelu_derivative],
 	'SiLU': [af.silu, af.silu_derivative],
+	'tanh': [af.tanh, af.tanh_derivative],
 	'sigmoid': [af.sigmoid, af.sigmoid_derivative],
 	'softmax': [af.softmax, None]
 }
@@ -17,6 +18,7 @@ AF_ALIASES = {
 	'gelu': 'GELU',
 	'silu': 'SiLU',
 	'swish': 'SiLU',
+	'tanh': 'tanh',
 	'sigmoid': 'sigmoid',
 	'softmax': 'softmax',
 }

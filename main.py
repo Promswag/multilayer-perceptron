@@ -286,13 +286,13 @@ def evaluate(config):
 
 		n_matches = int(matches.sum())
 		n_mismatches = int(len(comp) - n_matches)
-		agreement = (n_matches / len(comp)) if len(comp) > 0 else 0.0
+		accuracy = (n_matches / len(comp)) if len(comp) > 0 else 0.0
 
 		print(f"Target used: {target_label}")
 		print(f"Compared entries: {len(comp)}")
 		print(f"Matches: {n_matches}")
 		print(f"Mismatches: {n_mismatches}")
-		print(f"Agreement: {agreement:.4f} ({agreement * 100:.2f}%)")
+		print(f"Accuracy: {accuracy:.4f} ({accuracy * 100:.2f}%)")
 		if len(idx_only_a) > 0 or len(idx_only_b) > 0:
 			print(f"Index mismatch - only in first CSV: {len(idx_only_a)}, only in second CSV: {len(idx_only_b)}")
 
@@ -338,10 +338,10 @@ def evaluate(config):
 				raise ValueError(f"Loss function {loss_name} not supported")
 
 			y_pred_idx = np.argmax(y_pred, axis=1)
-			accuracy = np.mean(y_pred_idx == y_true_idx.astype(int).to_numpy())
+			eval_accuracy = np.mean(y_pred_idx == y_true_idx.astype(int).to_numpy())
 
-			print(f"Evaluation {loss_name} (probabilities): {loss_value:.6f}")
-			print(f"Evaluation accuracy (probabilities -> argmax): {accuracy:.4f} ({accuracy * 100:.2f}%)")
+			print(f"Evaluation {loss_name}: {loss_value:.6f}")
+			print(f"Evaluation accuracy: {eval_accuracy:.4f} ({eval_accuracy * 100:.2f}%)")
 
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
