@@ -1,26 +1,22 @@
 import pandas as pd
 import numpy as np
 from train_test_split import train_test_split
-from sklearn.datasets import load_digits
 import StandardScaler
 import MLP
 import json
 import sys
 import os
 import pickle
-from datetime import datetime
 
 PROJECT_NAME = "Multilayer Perceptron"
-DEFAULT_MODEL_PATH = os.path.join("models", "mlp_model.pkl")
 
 
-def build_default_model_path(config: dict) -> str:
+def build_model_path_from_config(config: dict) -> str:
 	config_name = "config"
 	if config is not None:
 		config_name = config.get("_config_name", "config")
 	base_name = os.path.splitext(os.path.basename(str(config_name)))[0]
-	timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-	return os.path.join("models", f"mlp_{base_name}_{timestamp}.pkl")
+	return os.path.join("models", f"mlp_{base_name}.pkl")
 
 
 def print_header(config_loaded: bool, model_ready: bool):
@@ -36,10 +32,11 @@ def print_header(config_loaded: bool, model_ready: bool):
 def print_menu():
 	print(
 		"[1] Load network config\n"
-		"[2] Split dataset\n"
-		"[3] Train model\n"
-		"[4] Predict\n"
-		"[5] Evaluate predictions\n"
+		"[2] Load model\n"
+		"[3] Split dataset\n"
+		"[4] Train model\n"
+		"[5] Predict\n"
+		"[6] Evaluate predictions\n"
 		"[q] Quit"
 	)
 
@@ -75,8 +72,10 @@ def load_dataset(dataset_path):
 		return None
 
 
-def save_model(model, scaler, config=None, path: str = DEFAULT_MODEL_PATH):
+def save_model(model, scaler, config=None, path: str = None):
 	try:
+		if not path:
+			raise ValueError("Model path is required.")
 		directory = os.path.dirname(path)
 		if directory:
 			os.makedirs(directory, exist_ok=True)
@@ -87,16 +86,17 @@ def save_model(model, scaler, config=None, path: str = DEFAULT_MODEL_PATH):
 			pickle.dump({
 				'model': model,
 				'scaler': scaler,
-				'config': stored_config,
-				'saved_at': datetime.now().isoformat(timespec='seconds')
+				'config': stored_config
 			}, file)
 		print(f"Model saved to {path}")
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 
 
-def load_model(path: str = DEFAULT_MODEL_PATH):
+def load_model(path: str):
 	try:
+		if not path:
+			raise ValueError("Model path is required.")
 		if not os.path.exists(path):
 			raise FileNotFoundError(f"Model file '{path}' does not exist.")
 		with open(path, 'rb') as file:
@@ -111,6 +111,29 @@ def load_model(path: str = DEFAULT_MODEL_PATH):
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
 		return None, None, None
+
+
+def load_model_interactive(config=None):
+	model_path = input("Enter path to model file: ").strip()
+	if not model_path:
+		print("Model path is required.")
+		return None, None, config
+	model, scaler, stored_config = load_model(model_path)
+	if model is None or scaler is None:
+		return None, None, config
+
+	if stored_config is not None:
+		stored_config["_config_name"] = os.path.basename(model_path)
+		stored_config["_config_path"] = model_path
+		if "seed" in stored_config.get("model", {}):
+			np.random.seed(stored_config["model"]["seed"])
+			print(f"Random seed set to {stored_config['model']['seed']}")
+		print("Config loaded from model file.")
+		config = stored_config
+	elif config is None:
+		print("Warning: loaded model does not contain config. Load a config file to use predict/evaluate.")
+
+	return model, scaler, config
 
 
 def split_dataset(config):
@@ -186,7 +209,10 @@ def train_model(train, valid, config):
 
 		model_path = config["model"].get("saved_model_path")
 		if not model_path:
-			model_path = build_default_model_path(config)
+			model_path = build_model_path_from_config(config)
+			print(f"No saved_model_path in config. Using default path: {model_path}")
+		if not model_path:
+			raise ValueError("Model save path is required.")
 		save_model(model, scaler, config, model_path)
 		return model, scaler
 	except Exception as e:
@@ -196,18 +222,10 @@ def train_model(train, valid, config):
 
 def predict(model, scaler, config=None):
 	try:
+		if config is None:
+			raise ValueError("Please load a config or model.")
 		if model is None or scaler is None:
-			default_model_path = DEFAULT_MODEL_PATH
-			if config is not None:
-				default_model_path = config["model"].get("saved_model_path") or DEFAULT_MODEL_PATH
-			model_path = input(f"Enter path to model file [{default_model_path}]: ").strip()
-			model_path = model_path if model_path else default_model_path
-			model, scaler, stored_config = load_model(model_path)
-			if model is None or scaler is None:
-				raise ValueError("Please train the model first or provide a valid saved model file.")
-			if config is None and stored_config is not None:
-				config = stored_config
-				print("Loaded config from model file.")
+			raise ValueError("Please train a model or load one.")
 		dataset_path = input("Enter the path to the dataset: ").strip()
 		df = load_dataset(dataset_path)
 		if df is None:
@@ -225,7 +243,7 @@ def predict(model, scaler, config=None):
 def evaluate(config):
 	try:
 		if config is None:
-			raise ValueError("Please load the config file first.")
+			raise ValueError("Please load a config or model).")
 
 		csv_a_path = input("Enter the path to the first CSV file: ").strip()
 		csv_b_path = input("Enter the path to the second CSV file: ").strip()
@@ -350,12 +368,14 @@ def main():
 			if choice == '1':
 				config = load_config()
 			elif choice == '2':
-				train, valid = split_dataset(config)
+				model, scaler, config = load_model_interactive(config)
 			elif choice == '3':
-				model, scaler = train_model(train, valid, config)
+				train, valid = split_dataset(config)
 			elif choice == '4':
-				predict(model, scaler, config)
+				model, scaler = train_model(train, valid, config)
 			elif choice == '5':
+				predict(model, scaler, config)
+			elif choice == '6':
 				evaluate(config)
 			elif choice in ['exit', 'quit', 'q']:
 				return
