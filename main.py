@@ -217,7 +217,6 @@ def train_model(train, valid, config):
 		return model, scaler
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
-		raise e
 		return None, None
 
 def predict(model, scaler, config=None):
@@ -382,7 +381,7 @@ def main():
 
 	except Exception as e:
 		print(f"{type(e).__name__}: {e}")
-		raise e
+		return
 
 if __name__ == "__main__":
 	main()
